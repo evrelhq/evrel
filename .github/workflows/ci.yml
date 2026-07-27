@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   rust:
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -30,9 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: blacksmith-2vcpu-ubuntu-2404
-          - os: blacksmith-6vcpu-macos-15
+        os:
+          - blacksmith-2vcpu-ubuntu-2404
+          - blacksmith-6vcpu-macos-15
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -46,6 +42,6 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: crates/evrel-node/pnpm-lock.yaml
-      - run: pnpm --dir crates/evrel-node install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --dir crates/evrel-node test

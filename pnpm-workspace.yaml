@@ -1,0 +1,6 @@
+packages:
+  - crates/evrel-node
+
+catalog:
+  '@napi-rs/cli': ^3.7.3
+  typescript: 7.0.1-rc
