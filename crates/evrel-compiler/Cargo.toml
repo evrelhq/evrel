@@ -1,0 +1,15 @@
+[package]
+name = "evrel-compiler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evrel-codegen-js = { path = "../evrel-codegen-js" }
+evrel-frontend = { path = "../evrel-frontend" }
+evrel-ir = { path = "../evrel-ir" }
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+wait-timeout.workspace = true

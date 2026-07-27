@@ -1,0 +1,10 @@
+# Test262 host capabilities which Evrel's Node executor intentionally does not
+# emulate yet. These are reported as skips and remain in the total denominator.
+
+unsupported_features = [
+    "IsHTMLDDA",
+]
+
+unsupported_flags = [
+    "CanBlockIsFalse",
+]

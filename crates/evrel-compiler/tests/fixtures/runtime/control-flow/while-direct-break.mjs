@@ -1,0 +1,8 @@
+let count = 0;
+
+while (count < 3) {
+    count++;
+    break;
+}
+
+__evrel.observe("while direct break", count);

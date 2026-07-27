@@ -1,0 +1,13 @@
+[package]
+name = "evrel-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "evrel"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+evrel-compiler = { path = "../evrel-compiler" }
+thiserror.workspace = true
