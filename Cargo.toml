@@ -5,6 +5,7 @@ members = [
     "crates/evrel-frontend",
     "crates/evrel-codegen-js",
     "crates/evrel-compiler",
+    "crates/evrel-middle",
     "crates/evrel-cli",
     "crates/evrel-node",
 ]

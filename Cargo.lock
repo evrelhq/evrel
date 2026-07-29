@@ -230,6 +230,7 @@ dependencies = [
  "evrel-codegen-js",
  "evrel-frontend",
  "evrel-ir",
+ "evrel-middle",
  "serde_json",
  "tempfile",
  "thiserror",
@@ -258,6 +259,14 @@ name = "evrel-ir"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "rustc-hash",
+]
+
+[[package]]
+name = "evrel-middle"
+version = "0.1.0"
+dependencies = [
+ "evrel-ir",
  "rustc-hash",
 ]
 
