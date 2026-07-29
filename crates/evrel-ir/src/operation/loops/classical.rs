@@ -107,6 +107,13 @@ impl ForOp {
         vec![OperationSuccessor::new(self.test_target, 0)]
     }
 
+    pub(crate) fn successor_target_mut(&mut self, successor_index: usize) -> &mut BlockTarget {
+        match successor_index {
+            0 => &mut self.test_target,
+            _ => panic!("for has no successor {successor_index}"),
+        }
+    }
+
     /// Returns phase blocks retained structurally rather than as host edges.
     pub fn structural_blocks(&self) -> Vec<BlockId> {
         vec![

@@ -61,6 +61,13 @@ where
         self.entries.get_mut(id.index())?.as_mut()
     }
 
+    pub(crate) fn remove(&mut self, id: I) -> Option<T> {
+        let value = self.entries.get_mut(id.index())?.take()?;
+        self.len -= 1;
+
+        Some(value)
+    }
+
     pub(crate) fn iter(&self) -> impl Iterator<Item = (I, &T)> + '_ {
         self.entries
             .iter()
@@ -110,5 +117,24 @@ mod tests {
         let operation = arena.alloc_with_id(|id| id.index());
 
         assert_eq!(arena.get(operation), Some(&operation.index()));
+    }
+
+    #[test]
+    fn removes_without_reusing_the_id() {
+        let mut arena = Arena::<OperationId, _>::new();
+
+        let removed = arena.alloc("removed");
+        let retained = arena.alloc("retained");
+
+        assert_eq!(arena.remove(removed), Some("removed"));
+        assert_eq!(arena.get(removed), None);
+        assert_eq!(arena.get(retained), Some(&"retained"));
+        assert_eq!(arena.len(), 1);
+
+        let later = arena.alloc("later");
+
+        assert_ne!(later, removed);
+        assert_eq!(arena.get(later), Some(&"later"));
+        assert_eq!(arena.len(), 2);
     }
 }

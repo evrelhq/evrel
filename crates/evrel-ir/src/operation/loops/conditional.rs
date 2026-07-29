@@ -107,6 +107,14 @@ impl WhileOp {
         self.targets.successors()
     }
 
+    pub(crate) fn successor_target_mut(&mut self, successor_index: usize) -> &mut BlockTarget {
+        match successor_index {
+            0 => &mut self.targets.body_target,
+            1 => &mut self.targets.exit_target,
+            _ => panic!("while has no successor {successor_index}"),
+        }
+    }
+
     pub(crate) const fn operand_count(&self) -> usize {
         self.targets.operand_count()
     }
@@ -163,6 +171,14 @@ impl DoWhileOp {
     /// Returns the operation's executable successors.
     pub fn successors(&self) -> Vec<OperationSuccessor> {
         self.targets.successors()
+    }
+
+    pub(crate) fn successor_target_mut(&mut self, successor_index: usize) -> &mut BlockTarget {
+        match successor_index {
+            0 => &mut self.targets.body_target,
+            1 => &mut self.targets.exit_target,
+            _ => panic!("do-while has no successor {successor_index}"),
+        }
     }
 
     pub(crate) const fn operand_count(&self) -> usize {

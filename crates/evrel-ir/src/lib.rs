@@ -17,8 +17,8 @@ mod value;
 pub use binding::{BindingData, BindingKind};
 pub use block::{BasicBlockData, BlockParameter, BlockParameterSource};
 pub use function::{
-    ExceptionHandlerData, ExceptionHandlerKind, FunctionBuilder, FunctionIr, FunctionKind,
-    FunctionMode, FunctionParameter, FunctionParameterKind, FunctionProperties,
+    ExceptionHandlerData, ExceptionHandlerKind, FunctionBuilder, FunctionEditor, FunctionIr,
+    FunctionKind, FunctionMode, FunctionParameter, FunctionParameterKind, FunctionProperties,
     LabeledStatementData, UnwindTarget,
 };
 pub use ids::{

@@ -1,0 +1,8 @@
+[package]
+name = "evrel-middle"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evrel-ir = { path = "../evrel-ir" }
+rustc-hash.workspace = true

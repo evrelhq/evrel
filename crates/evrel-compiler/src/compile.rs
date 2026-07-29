@@ -3,6 +3,7 @@
 use evrel_codegen_js::generate;
 use evrel_frontend::lower_source_file;
 use evrel_ir::ModuleIr;
+use evrel_middle::transform::promote_bindings_to_ssa;
 
 use crate::{
     CompileInput, CompileOutput, CompilerError, GeneratedModule, ProgramInput, ProgramOutput,
@@ -11,14 +12,14 @@ use crate::{
 
 /// Compiles one source file to JavaScript.
 pub fn compile(input: CompileInput<'_>) -> Result<CompileOutput, CompilerError> {
-    let module = lower_source_file(input.source_name(), input.source_text())?;
+    let mut module = lower_source_file(input.source_name(), input.source_text())?;
 
-    compile_module(&module)
+    compile_module(&mut module)
 }
 
 /// Compiles a complete host-resolved JavaScript program.
 pub fn compile_program(input: ProgramInput) -> Result<ProgramOutput, CompilerError> {
-    let program = build_program_ir(&input)?;
+    let mut program = build_program_ir(&input)?;
     let modules = program
         .modules()
         .map(|(module, data)| (module, data.key().clone()))
@@ -28,9 +29,8 @@ pub fn compile_program(input: ProgramInput) -> Result<ProgramOutput, CompilerErr
     for (module, key) in modules {
         let code = compile_module(
             program
-                .module(module)
-                .expect("a collected program module must remain live")
-                .ir(),
+                .module_ir_mut(module)
+                .expect("a collected program module must remain live"),
         )
         .map_err(|source| CompilerError::ProgramModule {
             module: key.as_str().into(),
@@ -44,7 +44,9 @@ pub fn compile_program(input: ProgramInput) -> Result<ProgramOutput, CompilerErr
     Ok(ProgramOutput::new(output))
 }
 
-fn compile_module(module: &ModuleIr) -> Result<CompileOutput, CompilerError> {
+fn compile_module(module: &mut ModuleIr) -> Result<CompileOutput, CompilerError> {
+    promote_bindings_to_ssa(module);
+
     let code = generate(module)?;
 
     Ok(CompileOutput::new(code))

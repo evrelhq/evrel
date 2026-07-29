@@ -92,6 +92,43 @@ impl OperationData {
     pub(crate) fn add_result(&mut self, value: ValueId) {
         self.results.push(value);
     }
+
+    pub(crate) fn replace_operand(
+        &mut self,
+        operand_index: usize,
+        replacement: ValueId,
+    ) -> ValueId {
+        let operand = self
+            .operands
+            .get_mut(operand_index)
+            .expect("cannot replace an unknown operation operand");
+
+        std::mem::replace(operand, replacement)
+    }
+
+    pub(crate) fn append_successor_argument(
+        &mut self,
+        successor_index: usize,
+        argument: ValueId,
+    ) -> usize {
+        let operand_index = self
+            .successors()
+            .get(successor_index)
+            .copied()
+            .expect("operation has no such successor")
+            .argument_operand_range()
+            .end;
+
+        self.operands.insert(operand_index, argument);
+
+        self.kind
+            .successor_target_mut(successor_index)
+            .append_argument();
+
+        debug_assert_eq!(self.operands.len(), self.kind.operand_count(),);
+
+        operand_index
+    }
 }
 
 /// The behavior performed by an IR operation.
@@ -560,6 +597,56 @@ impl OperationKind {
             Self::Switch(operation) => operation.successors(),
 
             _ => Vec::new(),
+        }
+    }
+
+    pub(crate) fn successor_target_mut(
+        &mut self,
+        successor_index: usize,
+    ) -> &mut super::BlockTarget {
+        match self {
+            Self::Jump(operation) => match successor_index {
+                0 => &mut operation.target,
+                _ => panic!("jump has no successor {successor_index}"),
+            },
+
+            Self::If(operation) => match successor_index {
+                0 => &mut operation.then_target,
+                1 => &mut operation.else_target,
+                _ => panic!("if has no successor {successor_index}"),
+            },
+
+            Self::Try(operation) => match successor_index {
+                0 => &mut operation.try_target,
+                _ => panic!("try has no successor {successor_index}"),
+            },
+
+            Self::While(operation) => operation.successor_target_mut(successor_index),
+
+            Self::DoWhile(operation) => operation.successor_target_mut(successor_index),
+
+            Self::For(operation) => operation.successor_target_mut(successor_index),
+
+            Self::ForIn(operation) => operation.successor_target_mut(successor_index),
+
+            Self::ForOf(operation) => operation.successor_target_mut(successor_index),
+
+            Self::Switch(operation) => {
+                if successor_index < operation.cases.len() {
+                    return &mut operation.cases[successor_index].target;
+                }
+
+                if successor_index == operation.cases.len() {
+                    return operation
+                        .no_match_target
+                        .as_mut()
+                        .expect("switch has no no-match successor");
+                }
+
+                panic!("switch has no successor {successor_index}");
+            }
+
+            _ => panic!("operation kind has no successor {successor_index}",),
         }
     }
 

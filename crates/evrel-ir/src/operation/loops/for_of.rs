@@ -84,6 +84,14 @@ impl ForOfOp {
         ]
     }
 
+    pub(crate) fn successor_target_mut(&mut self, successor_index: usize) -> &mut BlockTarget {
+        match successor_index {
+            0 => &mut self.body_target,
+            1 => &mut self.exit_target,
+            _ => panic!("for-of has no successor {successor_index}"),
+        }
+    }
+
     pub(crate) const fn effects(&self) -> OperationEffects {
         match self.kind {
             ForOfKind::Synchronous => OperationEffects::MAY_THROW_AND_OBSERVABLE,

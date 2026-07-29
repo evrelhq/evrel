@@ -1,5 +1,7 @@
 //! Function-level IR storage.
 
+use std::collections::HashSet;
+
 use crate::arena::Arena;
 use crate::{
     BasicBlockData, BindingId, BindingPattern, BlockId, BlockParameter, BlockParameterSource,
@@ -401,6 +403,322 @@ impl FunctionIr {
             .add_parameter(BlockParameter::new(source, value));
 
         value
+    }
+
+    pub(crate) fn remove_operations(&mut self, operations: impl IntoIterator<Item = OperationId>) {
+        let operations = operations.into_iter().collect::<Vec<_>>();
+        let mut removal_set = HashSet::with_capacity(operations.len());
+
+        for &operation in &operations {
+            assert!(
+                removal_set.insert(operation),
+                "cannot remove the same operation twice",
+            );
+        }
+
+        // Validate the complete batch before changing the function. Results
+        // may be used by other operations in this batch, but not by operations
+        // that will remain live.
+        let removals = operations
+            .iter()
+            .copied()
+            .map(|operation| {
+                let data = self
+                    .operations
+                    .get(operation)
+                    .expect("cannot remove an unknown operation");
+
+                assert!(
+                    !data.kind().is_terminator(),
+                    "cannot remove a block terminator",
+                );
+                assert!(
+                    data.regions().is_empty(),
+                    "cannot remove an operation that owns regions",
+                );
+
+                for &result in data.results() {
+                    let value = self
+                        .values
+                        .get(result)
+                        .expect("operation result must remain live");
+
+                    assert!(
+                        value
+                            .uses()
+                            .iter()
+                            .all(|use_site| removal_set.contains(&use_site.operation())),
+                        "cannot remove an operation result with a live user",
+                    );
+                }
+
+                (
+                    operation,
+                    data.block(),
+                    data.operands().to_vec(),
+                    data.results().to_vec(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // Remove every operand use while all values are still live. This also
+        // clears uses between operations in the removal set.
+        for (operation, _, operands, _) in &removals {
+            for (operand_index, &operand) in operands.iter().enumerate() {
+                let operand_index =
+                    u32::try_from(operand_index).expect("operand index must fit in u32");
+
+                self.values
+                    .get_mut(operand)
+                    .expect("operation operand must remain live")
+                    .remove_use(ValueUse::new(*operation, operand_index));
+            }
+        }
+
+        for (operation, block, _, _) in &removals {
+            self.blocks
+                .get_mut(*block)
+                .expect("operation block must remain live")
+                .remove_operation(*operation);
+        }
+
+        for (_, _, _, results) in &removals {
+            for &result in results {
+                let value = self
+                    .values
+                    .remove(result)
+                    .expect("operation result must remain live");
+
+                debug_assert!(
+                    value.uses().is_empty(),
+                    "removed operation result must have no remaining uses",
+                );
+            }
+        }
+
+        for (operation, _, _, _) in removals {
+            self.operations
+                .remove(operation)
+                .expect("validated operation must remain live");
+        }
+    }
+
+    pub(crate) fn replace_operand(
+        &mut self,
+        operation: OperationId,
+        operand_index: usize,
+        replacement: ValueId,
+    ) -> bool {
+        assert!(
+            self.values.get(replacement).is_some(),
+            "replacement value must belong to the function",
+        );
+
+        let previous = *self
+            .operations
+            .get(operation)
+            .expect("cannot edit an unknown operation")
+            .operands()
+            .get(operand_index)
+            .expect("cannot replace an unknown operation operand");
+
+        if previous == replacement {
+            return false;
+        }
+
+        let operand_index = u32::try_from(operand_index).expect("operand index must fit in u32");
+        let use_site = ValueUse::new(operation, operand_index);
+
+        self.values
+            .get_mut(previous)
+            .expect("existing operand must remain live")
+            .remove_use(use_site);
+
+        self.values
+            .get_mut(replacement)
+            .expect("replacement was validated above")
+            .add_use(use_site);
+
+        let replaced = self
+            .operations
+            .get_mut(operation)
+            .expect("operation was validated above")
+            .replace_operand(operand_index as usize, replacement);
+
+        debug_assert_eq!(replaced, previous);
+
+        true
+    }
+
+    fn append_successor_argument(
+        &mut self,
+        operation: OperationId,
+        successor_index: usize,
+        argument: ValueId,
+    ) {
+        assert!(
+            self.values.get(argument).is_some(),
+            "successor argument must belong to the function",
+        );
+
+        let (operand_index, shifted_operands) = {
+            let data = self
+                .operations
+                .get(operation)
+                .expect("cannot edit an unknown operation");
+
+            let operand_index = data
+                .successors()
+                .get(successor_index)
+                .copied()
+                .expect("operation has no such successor")
+                .argument_operand_range()
+                .end;
+
+            (operand_index, data.operands()[operand_index..].to_vec())
+        };
+
+        for (offset, value) in shifted_operands.iter().copied().enumerate() {
+            let shifted_index =
+                u32::try_from(operand_index + offset).expect("operand index must fit in u32");
+
+            self.values
+                .get_mut(value)
+                .expect("shifted operand must remain live")
+                .remove_use(ValueUse::new(operation, shifted_index));
+        }
+
+        let inserted_index = self
+            .operations
+            .get_mut(operation)
+            .expect("operation was validated above")
+            .append_successor_argument(successor_index, argument);
+
+        debug_assert_eq!(inserted_index, operand_index);
+
+        self.values
+            .get_mut(argument)
+            .expect("argument was validated above")
+            .add_use(ValueUse::new(
+                operation,
+                u32::try_from(operand_index).expect("operand index must fit in u32"),
+            ));
+
+        for (offset, value) in shifted_operands.into_iter().enumerate() {
+            let shifted_index =
+                u32::try_from(operand_index + offset + 1).expect("operand index must fit in u32");
+
+            self.values
+                .get_mut(value)
+                .expect("shifted operand must remain live")
+                .add_use(ValueUse::new(operation, shifted_index));
+        }
+    }
+
+    pub(crate) fn append_forwarded_block_parameters(
+        &mut self,
+        blocks: impl IntoIterator<Item = BlockId>,
+        mut argument_for_edge: impl FnMut(
+            &[(BlockId, ValueId)],
+            BlockId,
+            BlockId,
+            OperationId,
+            usize,
+        ) -> ValueId,
+    ) -> Vec<(BlockId, ValueId)> {
+        let blocks = blocks.into_iter().collect::<Vec<_>>();
+
+        for (index, block) in blocks.iter().copied().enumerate() {
+            assert!(
+                !blocks[..index].contains(&block),
+                "cannot append the same block parameter twice",
+            );
+
+            assert!(
+                self.blocks.get(block).is_some(),
+                "cannot add a parameter to an unknown block",
+            );
+        }
+
+        let incoming_edges = blocks
+            .iter()
+            .copied()
+            .map(|target| {
+                let edges = self
+                    .operations
+                    .iter()
+                    .flat_map(|(operation, data)| {
+                        data.successors().into_iter().enumerate().filter_map(
+                            move |(successor_index, successor)| {
+                                (successor.target().block() == target).then_some((
+                                    data.block(),
+                                    operation,
+                                    successor_index,
+                                ))
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                assert!(
+                    !edges.is_empty(),
+                    "a forwarded block parameter requires an incoming edge",
+                );
+
+                (target, edges)
+            })
+            .collect::<Vec<_>>();
+
+        // Allocate all parameters before asking for incoming arguments so cyclic
+        // merge blocks may refer to one another.
+        let parameters = blocks
+            .iter()
+            .copied()
+            .map(|block| {
+                let parameter = self.append_block_parameter(block, BlockParameterSource::Forwarded);
+
+                (block, parameter)
+            })
+            .collect::<Vec<_>>();
+
+        let mut arguments = Vec::new();
+
+        for ((target, edges), (_, parameter)) in incoming_edges.iter().zip(&parameters) {
+            for &(predecessor, terminator, successor_index) in edges {
+                let argument = argument_for_edge(
+                    &parameters,
+                    *target,
+                    predecessor,
+                    terminator,
+                    successor_index,
+                );
+
+                assert!(
+                    self.values.get(argument).is_some(),
+                    "incoming argument must belong to the function",
+                );
+
+                arguments.push((terminator, successor_index, argument));
+            }
+
+            debug_assert_eq!(
+                self.blocks
+                    .get(*target)
+                    .expect("parameter block must remain live")
+                    .parameters()
+                    .last()
+                    .expect("a parameter was just appended")
+                    .value(),
+                *parameter,
+            );
+        }
+
+        // Do not mutate any edge until every requested argument is valid.
+        for (terminator, successor_index, argument) in arguments {
+            self.append_successor_argument(terminator, successor_index, argument);
+        }
+
+        parameters
     }
 
     pub(crate) fn create_region(&mut self, parent: RegionId, result_count: usize) -> RegionId {

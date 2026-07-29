@@ -35,6 +35,16 @@ impl ValueData {
 
         self.uses.push(use_site);
     }
+
+    pub(crate) fn remove_use(&mut self, use_site: ValueUse) {
+        let index = self
+            .uses
+            .iter()
+            .position(|current| *current == use_site)
+            .expect("value does not contain the requested use site");
+
+        self.uses.remove(index);
+    }
 }
 
 /// Describes where an IR value originates.

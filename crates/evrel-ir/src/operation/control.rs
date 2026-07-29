@@ -33,6 +33,13 @@ impl BlockTarget {
     pub const fn argument_count(&self) -> usize {
         self.argument_count
     }
+
+    pub(crate) fn append_argument(&mut self) {
+        self.argument_count = self
+            .argument_count
+            .checked_add(1)
+            .expect("block-target argument count overflow");
+    }
 }
 
 /// One executable control-flow successor.

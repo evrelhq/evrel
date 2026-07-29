@@ -90,6 +90,16 @@ impl BasicBlockData {
         self.operations.push(operation);
     }
 
+    pub(crate) fn remove_operation(&mut self, operation: OperationId) {
+        let index = self
+            .operations
+            .iter()
+            .position(|&candidate| candidate == operation)
+            .expect("block does not contain the requested operation");
+
+        self.operations.remove(index);
+    }
+
     pub(crate) fn set_terminator(&mut self, operation: OperationId) {
         assert!(
             self.terminator.replace(operation).is_none(),
