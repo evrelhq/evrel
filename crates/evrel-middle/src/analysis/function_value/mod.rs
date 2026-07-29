@@ -9,7 +9,7 @@ mod inputs;
 mod sparse;
 mod transfer;
 
-pub use abstract_value::AbstractValue;
+pub use abstract_value::{AbstractValue, ValueTypeSet};
 pub use analysis::FunctionValueAnalysis;
 pub use inputs::FunctionValueInputs;
 

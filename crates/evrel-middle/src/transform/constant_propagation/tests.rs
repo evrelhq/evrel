@@ -113,7 +113,7 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
 }
 
 #[test]
-fn preserves_a_potentially_throwing_operation_with_a_known_result() {
+fn replaces_proven_non_throwing_numeric_addition() {
     let mut module = ModuleIr::new();
     let function = module.entry_function();
 
@@ -138,16 +138,14 @@ fn preserves_a_potentially_throwing_operation_with_a_known_result() {
         addition
     };
 
-    assert_eq!(propagate_constants(&mut module), 0);
-    assert!(matches!(
-        module
-            .function(function)
-            .unwrap()
-            .operation(addition)
-            .unwrap()
-            .kind(),
-        OperationKind::Binary(_),
-    ));
+    assert_eq!(propagate_constants(&mut module), 1);
+
+    let function = module.function(function).unwrap();
+    let OperationKind::Constant(constant) = function.operation(addition).unwrap().kind() else {
+        panic!("numeric addition should have been replaced");
+    };
+
+    assert_eq!(constant.value(), &ConstantValue::Number(42.0));
 }
 
 #[test]

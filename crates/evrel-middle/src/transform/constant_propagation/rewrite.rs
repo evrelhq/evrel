@@ -2,7 +2,7 @@
 
 use evrel_ir::{ConstantValue, FunctionEditor, FunctionIr, OperationId, OperationKind};
 
-use crate::analysis::FunctionValueAnalysis;
+use crate::analysis::{FunctionValueAnalysis, is_safe_to_remove};
 
 /// Collects replacements without mutating the analyzed function snapshot.
 pub(super) fn plan_constant_replacements(
@@ -19,11 +19,7 @@ pub(super) fn plan_constant_replacements(
                 return None;
             }
 
-            if !function
-                .operation_effects(operation)
-                .expect("live operation must have an effect summary")
-                .is_empty()
-            {
+            if !is_safe_to_remove(function, analysis, operation) {
                 return None;
             }
 
