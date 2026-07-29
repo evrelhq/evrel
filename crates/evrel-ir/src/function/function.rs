@@ -5,11 +5,11 @@ use std::collections::HashSet;
 use crate::arena::Arena;
 use crate::{
     BasicBlockData, BindingId, BindingPattern, BlockId, BlockParameter, BlockParameterSource,
-    ExceptionHandlerData, ExceptionHandlerId, FunctionId, FunctionKind, FunctionMode,
-    FunctionParameter, FunctionParameterKind, FunctionProperties, LabeledStatementData,
-    LabeledStatementId, LoopOperation, MemoryEffects, OperationData, OperationEffects, OperationId,
-    OperationKind, RegionData, RegionId, RegionOwner, UnwindTarget, ValueData, ValueDefinition,
-    ValueId, ValueUse,
+    ConstantValue, ExceptionHandlerData, ExceptionHandlerId, FunctionId, FunctionKind,
+    FunctionMode, FunctionParameter, FunctionParameterKind, FunctionProperties,
+    LabeledStatementData, LabeledStatementId, LoopOperation, MemoryEffects, OperationData,
+    OperationEffects, OperationId, OperationKind, RegionData, RegionId, RegionOwner, UnwindTarget,
+    ValueData, ValueDefinition, ValueId, ValueUse,
 };
 
 /// Owns the regions, blocks, operations, and values for one function.
@@ -500,6 +500,28 @@ impl FunctionIr {
             self.operations
                 .remove(operation)
                 .expect("validated operation must remain live");
+        }
+    }
+
+    pub(crate) fn replace_operation_with_constant(
+        &mut self,
+        operation: OperationId,
+        value: ConstantValue,
+    ) {
+        let operands = self
+            .operations
+            .get_mut(operation)
+            .expect("cannot replace an unknown operation")
+            .replace_with_constant(value);
+
+        for (operand_index, operand) in operands.into_iter().enumerate() {
+            let operand_index =
+                u32::try_from(operand_index).expect("operand index must fit in u32");
+
+            self.values
+                .get_mut(operand)
+                .expect("operation operand must remain live")
+                .remove_use(ValueUse::new(operation, operand_index));
         }
     }
 

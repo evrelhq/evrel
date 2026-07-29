@@ -1,6 +1,6 @@
 //! Invariant-preserving mutation of existing function IR.
 
-use crate::{BlockId, FunctionIr, OperationId, ValueId};
+use crate::{BlockId, ConstantValue, FunctionIr, OperationId, ValueId};
 
 /// Mutates an existing function while preserving IR invariants.
 ///
@@ -61,6 +61,18 @@ impl<'ir> FunctionEditor<'ir> {
         uses.len()
     }
 
+    /// Replaces a one-result ordinary operation with a constant.
+    ///
+    /// The operation ID, result value, block position, and result uses remain
+    /// unchanged. The replaced operation must not be a terminator or own regions.
+    pub fn replace_operation_with_constant(
+        &mut self,
+        operation: OperationId,
+        value: ConstantValue,
+    ) {
+        self.ir.replace_operation_with_constant(operation, value);
+    }
+
     /// Appends one forwarded parameter to every selected block and updates all
     /// incoming edges.
     ///
@@ -86,7 +98,7 @@ impl<'ir> FunctionEditor<'ir> {
 mod tests {
     use crate::{
         BinaryOp, BinaryOperator, BlockParameterSource, BlockTarget, ConstantOp, ConstantValue,
-        IfOp, JumpOp, ModuleBuilder, ModuleIr, OperationKind, UnwindTarget,
+        IfOp, JumpOp, ModuleBuilder, ModuleIr, OperationKind, ReturnOp, UnwindTarget,
     };
 
     use super::FunctionEditor;
@@ -136,6 +148,67 @@ mod tests {
         assert_eq!(replacement_uses[0].operand_index(), 0);
         assert_eq!(replacement_uses[1].operation(), binary);
         assert_eq!(replacement_uses[1].operand_index(), 1);
+    }
+
+    #[test]
+    fn replaces_an_operation_with_a_constant_without_changing_its_result() {
+        let mut module = ModuleIr::new();
+        let function_id = module.entry_function();
+
+        let (left, right, operation, result, return_operation) = {
+            let mut module_builder = ModuleBuilder::new(&mut module);
+            let mut builder = module_builder.function_builder(function_id);
+
+            let left_operation = builder.append_operation(
+                OperationKind::Constant(ConstantOp::new(ConstantValue::Number(20.0))),
+                [],
+                UnwindTarget::Propagate,
+            );
+            let left = builder.operation_results(left_operation)[0];
+
+            let right_operation = builder.append_operation(
+                OperationKind::Constant(ConstantOp::new(ConstantValue::Number(22.0))),
+                [],
+                UnwindTarget::Propagate,
+            );
+            let right = builder.operation_results(right_operation)[0];
+
+            let operation = builder.append_operation(
+                OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
+                [left, right],
+                UnwindTarget::Propagate,
+            );
+            let result = builder.operation_results(operation)[0];
+
+            let return_operation = builder.terminate(
+                OperationKind::Return(ReturnOp::new()),
+                [result],
+                UnwindTarget::Propagate,
+            );
+
+            (left, right, operation, result, return_operation)
+        };
+
+        let function = module.function_mut(function_id).unwrap();
+        let mut editor = FunctionEditor::new(function);
+
+        editor.replace_operation_with_constant(operation, ConstantValue::Number(42.0));
+
+        let operation_data = editor.ir().operation(operation).unwrap();
+        let OperationKind::Constant(constant) = operation_data.kind() else {
+            panic!("operation should have been replaced with a constant");
+        };
+
+        assert_eq!(constant.value(), &ConstantValue::Number(42.0));
+        assert!(operation_data.operands().is_empty());
+        assert_eq!(operation_data.results(), [result]);
+
+        assert!(editor.ir().value(left).unwrap().uses().is_empty());
+        assert!(editor.ir().value(right).unwrap().uses().is_empty());
+        assert_eq!(
+            editor.ir().operation(return_operation).unwrap().operands(),
+            [result],
+        );
     }
 
     #[test]

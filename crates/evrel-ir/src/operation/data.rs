@@ -3,8 +3,8 @@
 use crate::{BindingId, BlockId, FunctionId, OperationSuccessor, RegionId, UnwindTarget, ValueId};
 
 use super::{
-    ArrayLiteralElement, ArrayLiteralOp, AwaitOp, BinaryOp, CallOp, ConstantOp, ConstructOp,
-    CreateClassOp, CreateFunctionOp, DebuggerOp, DeleteOp, DestructureAssignmentOp,
+    ArrayLiteralElement, ArrayLiteralOp, AwaitOp, BinaryOp, CallOp, ConstantOp, ConstantValue,
+    ConstructOp, CreateClassOp, CreateFunctionOp, DebuggerOp, DeleteOp, DestructureAssignmentOp,
     DestructureBindingOp, DoWhileOp, DynamicImportOp, ForInOp, ForOfOp, ForOp, HasPrivateNameOp,
     IfOp, InitializeBindingOp, IsNullishOp, JsxElementOp, JsxFragmentOp, JumpOp, LoadArgumentsOp,
     LoadBindingOp, LoadGlobalOp, LoadPropertyOp, LoadSuperPropertyOp, LoadThisOp, LoopOperation,
@@ -104,6 +104,27 @@ impl OperationData {
             .expect("cannot replace an unknown operation operand");
 
         std::mem::replace(operand, replacement)
+    }
+
+    pub(crate) fn replace_with_constant(&mut self, value: ConstantValue) -> Vec<ValueId> {
+        assert!(
+            !self.kind.is_terminator(),
+            "cannot replace a terminator with a constant",
+        );
+        assert!(
+            self.regions().is_empty(),
+            "cannot replace an operation that owns regions",
+        );
+        assert_eq!(
+            self.results.len(),
+            1,
+            "constant replacement requires exactly one result",
+        );
+
+        let operands = std::mem::take(&mut self.operands);
+        self.kind = OperationKind::Constant(ConstantOp::new(value));
+
+        operands
     }
 
     pub(crate) fn append_successor_argument(

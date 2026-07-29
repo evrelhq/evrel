@@ -3,7 +3,7 @@
 use evrel_codegen_js::generate;
 use evrel_frontend::lower_source_file;
 use evrel_ir::ModuleIr;
-use evrel_middle::transform::promote_bindings_to_ssa;
+use evrel_middle::transform::{promote_bindings_to_ssa, propagate_constants};
 
 use crate::{
     CompileInput, CompileOutput, CompilerError, GeneratedModule, ProgramInput, ProgramOutput,
@@ -46,6 +46,7 @@ pub fn compile_program(input: ProgramInput) -> Result<ProgramOutput, CompilerErr
 
 fn compile_module(module: &mut ModuleIr) -> Result<CompileOutput, CompilerError> {
     promote_bindings_to_ssa(module);
+    propagate_constants(module);
 
     let code = generate(module)?;
 
