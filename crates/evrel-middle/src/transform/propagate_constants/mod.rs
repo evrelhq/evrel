@@ -1,4 +1,4 @@
-//! Constant propagation over function-local SSA values.
+//! Propagation of constants over function-local SSA values.
 
 mod rewrite;
 
