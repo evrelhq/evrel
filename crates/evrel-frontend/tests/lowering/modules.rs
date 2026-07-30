@@ -3,6 +3,41 @@
 use super::*;
 
 #[test]
+fn records_precise_module_item_locations() {
+    let source = concat!(
+        "import value, { read as load } from \"./dependency.js\";\n",
+        "export { value as answer };\n",
+        "export * from \"./other.js\";"
+    );
+    let module = lower_javascript_module(source).unwrap();
+
+    let location_text = |location| {
+        let CompilerLocation::Source { file, range } = module.location(location).unwrap() else {
+            panic!("frontend module items must have concrete source locations");
+        };
+
+        &module.source_file(*file).unwrap().text()[range.start() as usize..range.end() as usize]
+    };
+
+    assert_eq!(
+        module
+            .imports()
+            .iter()
+            .map(|import| location_text(import.location()))
+            .collect::<Vec<_>>(),
+        ["value", "read as load"]
+    );
+    assert_eq!(
+        module
+            .exports()
+            .iter()
+            .map(|export| location_text(export.location()))
+            .collect::<Vec<_>>(),
+        ["value as answer", "export * from \"./other.js\";"]
+    );
+}
+
+#[test]
 fn records_bare_static_imports_without_executable_operations() {
     let module = lower_javascript_module(
         "import \"./setup.js\";

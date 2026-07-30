@@ -170,7 +170,7 @@ mod tests {
     use evrel_ir::{
         BindingId, BindingKind, ConstantOp, ConstantValue, FunctionId, FunctionKind, FunctionMode,
         InitializeBindingOp, LoadBindingOp, LoadGlobalOp, ModuleBuilder, ModuleExport,
-        ModuleExportName, ModuleIr, OperationKind, UnwindTarget,
+        ModuleExportName, ModuleIr, OperationKind, TextRange, UnwindTarget,
     };
 
     use super::ModuleBindingPromotion;
@@ -242,7 +242,11 @@ mod tests {
         let binding = {
             let mut builder = ModuleBuilder::new(&mut module);
             let binding = builder.create_binding(function, "value", BindingKind::Var);
+            let source = "export { value };";
+            let file = builder.add_source_file("input.mjs", source);
+            let location = builder.source_location(file, TextRange::new(0, source.len() as u32));
             builder.add_export(ModuleExport::local(
+                location,
                 ModuleExportName::Identifier("value".into()),
                 binding,
             ));

@@ -2,7 +2,7 @@
 
 use evrel_ir::{
     BindingId, BindingKind, FunctionProperties, ModuleBuilder, ModuleExport,
-    ModuleExportName as IrModuleExportName, ModuleImport, ModuleIr,
+    ModuleExportName as IrModuleExportName, ModuleImport, ModuleIr, SourceFileId, TextRange,
 };
 use oxc_ast::ast::{
     Declaration, ExportDefaultDeclarationKind, ImportDeclarationSpecifier, ImportOrExportKind,
@@ -10,7 +10,7 @@ use oxc_ast::ast::{
 };
 use oxc_ecmascript::BoundNames;
 use oxc_semantic::{Scoping, SymbolId};
-use oxc_span::GetSpan;
+use oxc_span::{GetSpan, Span};
 use rustc_hash::FxHashMap;
 
 use crate::{FrontendError, module_attributes::lower_module_attributes, parse::ParsedModule};
@@ -59,12 +59,14 @@ pub(crate) fn lower_module(
             &mut module_builder,
             &parsed.program().body,
             &bindings_by_symbol,
+            source_file,
         )?;
         let default_export_binding = collect_exports(
             &mut module_builder,
             &parsed.program().body,
             parsed.scoping(),
             &bindings_by_symbol,
+            source_file,
         )?;
         let mut context = LoweringContext::new(
             parsed.scoping(),
@@ -88,6 +90,7 @@ fn collect_imports(
     builder: &mut ModuleBuilder<'_>,
     statements: &[Statement<'_>],
     bindings_by_symbol: &FxHashMap<SymbolId, BindingId>,
+    source_file: SourceFileId,
 ) -> Result<(), FrontendError> {
     for statement in statements {
         let Statement::ImportDeclaration(declaration) = statement else {
@@ -105,26 +108,36 @@ fn collect_imports(
         let source = declaration.source.value.as_str();
         let attributes = lower_module_attributes(declaration.with_clause.as_deref());
         let Some(specifiers) = &declaration.specifiers else {
-            builder.add_import(ModuleImport::bare(source, attributes));
+            let location = source_location(builder, source_file, declaration.span());
+            builder.add_import(ModuleImport::bare(location, source, attributes));
             continue;
         };
 
         if specifiers.is_empty() {
-            builder.add_import(ModuleImport::bare(source, attributes));
+            let location = source_location(builder, source_file, declaration.span());
+            builder.add_import(ModuleImport::bare(location, source, attributes));
             continue;
         }
 
         for specifier in specifiers {
+            let location = source_location(builder, source_file, specifier.span());
+
             match specifier {
                 ImportDeclarationSpecifier::ImportDefaultSpecifier(specifier) => {
                     let binding = import_binding(bindings_by_symbol, specifier.local.symbol_id());
 
-                    builder.add_import(ModuleImport::default(source, attributes.clone(), binding));
+                    builder.add_import(ModuleImport::default(
+                        location,
+                        source,
+                        attributes.clone(),
+                        binding,
+                    ));
                 }
                 ImportDeclarationSpecifier::ImportNamespaceSpecifier(specifier) => {
                     let binding = import_binding(bindings_by_symbol, specifier.local.symbol_id());
 
                     builder.add_import(ModuleImport::namespace(
+                        location,
                         source,
                         attributes.clone(),
                         binding,
@@ -139,6 +152,7 @@ fn collect_imports(
                     let imported = lower_module_export_name(&specifier.imported);
 
                     builder.add_import(ModuleImport::named(
+                        location,
                         source,
                         attributes.clone(),
                         imported,
@@ -167,6 +181,7 @@ fn collect_exports(
     statements: &[Statement<'_>],
     scoping: &Scoping,
     bindings_by_symbol: &FxHashMap<SymbolId, BindingId>,
+    source_file: SourceFileId,
 ) -> Result<Option<BindingId>, FrontendError> {
     let mut default_export_binding = None;
 
@@ -211,7 +226,9 @@ fn collect_exports(
                 "a module cannot contain multiple default exports"
             );
 
+            let location = source_location(builder, source_file, declaration.span());
             builder.add_export(ModuleExport::local(
+                location,
                 IrModuleExportName::Identifier("default".into()),
                 binding,
             ));
@@ -226,12 +243,16 @@ fn collect_exports(
 
             let source = declaration.source.value.as_str();
             let attributes = lower_module_attributes(declaration.with_clause.as_deref());
+            let location = source_location(builder, source_file, declaration.span());
             let export = match &declaration.exported {
-                Some(exported) => {
-                    ModuleExport::namespace(source, attributes, lower_module_export_name(exported))
-                }
+                Some(exported) => ModuleExport::namespace(
+                    location,
+                    source,
+                    attributes,
+                    lower_module_export_name(exported),
+                ),
 
-                None => ModuleExport::star(source, attributes),
+                None => ModuleExport::star(location, source, attributes),
             };
 
             builder.add_export(export);
@@ -261,8 +282,10 @@ fn collect_exports(
 
                 let imported = lower_module_export_name(&specifier.local);
                 let exported = lower_module_export_name(&specifier.exported);
+                let location = source_location(builder, source_file, specifier.span());
 
                 builder.add_export(ModuleExport::indirect(
+                    location,
                     source,
                     attributes.clone(),
                     imported,
@@ -294,8 +317,9 @@ fn collect_exports(
                     .get(&identifier.symbol_id())
                     .expect("exported Oxc symbol must have an Evrel binding");
                 let exported = IrModuleExportName::Identifier(identifier.name.as_str().into());
+                let location = source_location(builder, source_file, identifier.span());
 
-                builder.add_export(ModuleExport::local(exported, binding));
+                builder.add_export(ModuleExport::local(location, exported, binding));
             });
 
             continue;
@@ -308,12 +332,21 @@ fn collect_exports(
 
             let binding = local_export_binding(&specifier.local, scoping, bindings_by_symbol)?;
             let exported = lower_module_export_name(&specifier.exported);
+            let location = source_location(builder, source_file, specifier.span());
 
-            builder.add_export(ModuleExport::local(exported, binding));
+            builder.add_export(ModuleExport::local(location, exported, binding));
         }
     }
 
     Ok(default_export_binding)
+}
+
+fn source_location(
+    builder: &mut ModuleBuilder<'_>,
+    source_file: SourceFileId,
+    span: Span,
+) -> evrel_ir::LocationId {
+    builder.source_location(source_file, TextRange::new(span.start, span.end))
 }
 
 fn local_export_binding(
