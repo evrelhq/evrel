@@ -27,6 +27,7 @@ mod yield_expression;
 
 use evrel_ir::ValueId;
 use oxc_ast::ast::Expression;
+use oxc_span::GetSpan;
 
 use crate::{FrontendError, lower::FunctionLowerer};
 
@@ -34,6 +35,17 @@ pub(super) use assignment::lower_assignment_target_write;
 
 /// Lowers an expression and returns its produced SSA value.
 pub(super) fn lower_expression(
+    lowerer: &mut FunctionLowerer<'_, '_, '_>,
+    expression: &Expression<'_>,
+) -> Result<ValueId, FrontendError> {
+    let span = expression.span();
+
+    lowerer.with_span(span, |lowerer| {
+        lower_expression_at_current_location(lowerer, expression)
+    })
+}
+
+fn lower_expression_at_current_location(
     lowerer: &mut FunctionLowerer<'_, '_, '_>,
     expression: &Expression<'_>,
 ) -> Result<ValueId, FrontendError> {

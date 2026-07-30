@@ -325,29 +325,34 @@ mod tests {
             let mut builder = module_builder.function_builder(function_id);
 
             let initial = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial)[0];
             let initialization = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
                 [initial],
                 UnwindTarget::Propagate,
             );
 
             let replacement = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let replacement = builder.operation_results(replacement)[0];
             let store = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::StoreBinding(StoreBindingOp::new(binding)),
                 [replacement],
                 UnwindTarget::Propagate,
             );
             let load = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
                 UnwindTarget::Propagate,
@@ -385,12 +390,14 @@ mod tests {
             let join = builder.create_block();
 
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -402,17 +409,20 @@ mod tests {
 
             builder.switch_to_block(left);
             let initial = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial)[0];
             let initialization = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
                 [initial],
                 UnwindTarget::Propagate,
             );
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -420,6 +430,7 @@ mod tests {
 
             builder.switch_to_block(right);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -427,6 +438,7 @@ mod tests {
 
             builder.switch_to_block(join);
             let load = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
                 UnwindTarget::Propagate,
@@ -462,24 +474,28 @@ mod tests {
             let mut builder = module_builder.function_builder(function_id);
 
             let initial = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial)[0];
             let initialization = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
                 [initial],
                 UnwindTarget::Propagate,
             );
 
             let function = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(created_function)),
                 [],
                 UnwindTarget::Propagate,
             );
             let function = builder.operation_results(function)[0];
             let store = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::StoreBinding(StoreBindingOp::new(binding)),
                 [function],
                 UnwindTarget::Propagate,

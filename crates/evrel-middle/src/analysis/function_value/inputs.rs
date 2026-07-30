@@ -71,11 +71,13 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let boundary = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let result = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,

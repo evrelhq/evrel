@@ -1,6 +1,6 @@
 //! Module-wide frontend lowering state.
 
-use evrel_ir::{BindingId, PrivateNameId};
+use evrel_ir::{BindingId, PrivateNameId, SourceFileId};
 use oxc_ast::ast::IdentifierReference;
 use oxc_semantic::{Scoping, SymbolId};
 use rustc_hash::FxHashMap;
@@ -11,6 +11,7 @@ pub(crate) struct LoweringContext<'semantic> {
     bindings_by_symbol: FxHashMap<SymbolId, BindingId>,
     private_name_scopes: Vec<FxHashMap<Box<str>, PrivateNameId>>,
     default_export_binding: Option<BindingId>,
+    source_file: SourceFileId,
 }
 
 impl<'semantic> LoweringContext<'semantic> {
@@ -18,12 +19,14 @@ impl<'semantic> LoweringContext<'semantic> {
         scoping: &'semantic Scoping,
         bindings_by_symbol: FxHashMap<SymbolId, BindingId>,
         default_export_binding: Option<BindingId>,
+        source_file: SourceFileId,
     ) -> Self {
         Self {
             scoping,
             bindings_by_symbol,
             private_name_scopes: Vec::new(),
             default_export_binding,
+            source_file,
         }
     }
 
@@ -33,6 +36,10 @@ impl<'semantic> LoweringContext<'semantic> {
 
     pub(crate) const fn default_export_binding(&self) -> Option<BindingId> {
         self.default_export_binding
+    }
+
+    pub(crate) const fn source_file(&self) -> SourceFileId {
+        self.source_file
     }
 
     pub(crate) fn contains_binding(&self, symbol: SymbolId) -> bool {

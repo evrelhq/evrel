@@ -179,12 +179,14 @@ mod tests {
         let mut module_builder = ModuleBuilder::new(module);
         let mut builder = module_builder.function_builder(function);
         let undefined = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
             UnwindTarget::Propagate,
         );
         let undefined = builder.operation_results(undefined)[0];
         builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
             [undefined],
             UnwindTarget::Propagate,
@@ -273,6 +275,7 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(nested);
             builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
                 UnwindTarget::Propagate,
@@ -302,6 +305,7 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function);
             builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("eval")),
                 [],
                 UnwindTarget::Propagate,

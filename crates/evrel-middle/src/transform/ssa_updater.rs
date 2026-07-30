@@ -332,12 +332,14 @@ mod tests {
             let mut builder = module_builder.function_builder(function_id);
 
             let definition_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let definition = builder.operation_results(definition_operation)[0];
             let use_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(2.0))),
                 [],
                 UnwindTarget::Propagate,
@@ -394,12 +396,14 @@ mod tests {
             let join = builder.create_block();
 
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -411,12 +415,14 @@ mod tests {
 
             builder.switch_to_block(left);
             let left_definition_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let left_definition = builder.operation_results(left_definition_operation)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -424,12 +430,14 @@ mod tests {
 
             builder.switch_to_block(right);
             let right_definition_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(2.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let right_definition = builder.operation_results(right_definition_operation)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -437,6 +445,7 @@ mod tests {
 
             builder.switch_to_block(join);
             let use_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
@@ -497,12 +506,14 @@ mod tests {
             let mut builder = module_builder.function_builder(function_id);
 
             let use_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let used_result = builder.operation_results(use_operation)[0];
             let definition_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
@@ -533,6 +544,7 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function_id);
             let use_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
@@ -577,12 +589,14 @@ mod tests {
             let exit = builder.create_block();
 
             let initial_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(0.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial_operation)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -590,18 +604,21 @@ mod tests {
 
             builder.switch_to_block(header);
             let use_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let used_result = builder.operation_results(use_operation)[0];
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(body, 0),
                     BlockTarget::new(exit, 0),
@@ -613,12 +630,14 @@ mod tests {
 
             builder.switch_to_block(body);
             let iteration_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let iteration = builder.operation_results(iteration_operation)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -690,12 +709,14 @@ mod tests {
             let join = builder.create_block();
 
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -707,12 +728,14 @@ mod tests {
 
             builder.switch_to_block(left);
             let left_definition_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let left_definition = builder.operation_results(left_definition_operation)[0];
             let left_jump = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -720,12 +743,14 @@ mod tests {
 
             builder.switch_to_block(right);
             let right_definition_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(2.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let right_definition = builder.operation_results(right_definition_operation)[0];
             let right_jump = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -733,12 +758,14 @@ mod tests {
 
             builder.switch_to_block(join);
             let use_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let used_result = builder.operation_results(use_operation)[0];
             let consumer = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::StrictEqual)),
                 [used_result, used_result],
                 UnwindTarget::Propagate,
@@ -828,12 +855,14 @@ mod tests {
             let exit = builder.create_block();
 
             let initial_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(0.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial_operation)[0];
             let entry_jump = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -841,23 +870,27 @@ mod tests {
 
             builder.switch_to_block(header);
             let use_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let used_result = builder.operation_results(use_operation)[0];
             let consumer = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::StrictEqual)),
                 [used_result, used_result],
                 UnwindTarget::Propagate,
             );
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(body, 0),
                     BlockTarget::new(exit, 0),
@@ -869,12 +902,14 @@ mod tests {
 
             builder.switch_to_block(body);
             let iteration_operation = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let iteration = builder.operation_results(iteration_operation)[0];
             let backedge = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,

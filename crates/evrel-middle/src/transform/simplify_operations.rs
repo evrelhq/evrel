@@ -295,6 +295,7 @@ mod tests {
             let (second, second_result) =
                 append_binary(&mut builder, BinaryOperator::Multiply, first_result, one);
             let returned = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [second_result],
                 UnwindTarget::Propagate,
@@ -332,18 +333,21 @@ mod tests {
             let (_, boolean) =
                 append_binary(&mut builder, BinaryOperator::StrictEqual, left, right);
             let inner = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
                 [boolean],
                 UnwindTarget::Propagate,
             );
             let inner_result = builder.operation_results(inner)[0];
             let outer = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
                 [inner_result],
                 UnwindTarget::Propagate,
             );
             let outer_result = builder.operation_results(outer)[0];
             let returned = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [outer_result],
                 UnwindTarget::Propagate,
@@ -378,6 +382,7 @@ mod tests {
             let (addition, result) = append_binary(&mut builder, BinaryOperator::Add, number, zero);
 
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
                 UnwindTarget::Propagate,
@@ -420,6 +425,7 @@ mod tests {
                 append_binary(&mut builder, BinaryOperator::StrictEqual, number, number);
 
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
                 UnwindTarget::Propagate,
@@ -449,6 +455,7 @@ mod tests {
 
     fn append_global(builder: &mut evrel_ir::FunctionBuilder<'_>, name: &str) -> ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new(name)),
             [],
             UnwindTarget::Propagate,
@@ -459,6 +466,7 @@ mod tests {
 
     fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,
@@ -473,6 +481,7 @@ mod tests {
         operand: ValueId,
     ) -> ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(operator)),
             [operand],
             UnwindTarget::Propagate,
@@ -488,6 +497,7 @@ mod tests {
         right: ValueId,
     ) -> (evrel_ir::OperationId, ValueId) {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(operator)),
             [left, right],
             UnwindTarget::Propagate,

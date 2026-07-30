@@ -8,11 +8,12 @@ mod parameter;
 use evrel_ir::{
     BindingId, BindingKind, BindingPattern, BlockId, BlockParameterSource, ExceptionHandlerId,
     FunctionBuilder, FunctionId, FunctionKind, FunctionMode, FunctionParameterKind,
-    FunctionProperties, LabeledStatementData, LabeledStatementId, OperationId, OperationKind,
-    PrivateNameId, RegionId, TemplateSiteId, UnwindTarget, ValueId,
+    FunctionProperties, LabeledStatementData, LabeledStatementId, LocationId, OperationId,
+    OperationKind, PrivateNameId, RegionId, TemplateSiteId, TextRange, UnwindTarget, ValueId,
 };
 use oxc_ast::ast::IdentifierReference;
 use oxc_semantic::{Scoping, SymbolId};
+use oxc_span::Span;
 use rustc_hash::FxHashMap;
 
 use super::LoweringContext;
@@ -30,6 +31,7 @@ pub(crate) use parameter::lower_function_parameters;
 pub(crate) struct FunctionLowerer<'ir, 'context, 'semantic> {
     builder: FunctionBuilder<'ir>,
     context: &'context mut LoweringContext<'semantic>,
+    current_location: LocationId,
     unwind_target: UnwindTarget,
     controls: Vec<control::ControlContext>,
 }
@@ -39,10 +41,12 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
     pub(crate) fn new(
         builder: FunctionBuilder<'ir>,
         context: &'context mut LoweringContext<'semantic>,
+        location: LocationId,
     ) -> Self {
         Self {
             builder,
             context,
+            current_location: location,
             unwind_target: UnwindTarget::Propagate,
             controls: Vec::new(),
         }
@@ -67,10 +71,11 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         build: impl FnOnce(&mut FunctionLowerer<'_, '_, 'semantic>) -> R,
     ) -> (FunctionId, R) {
         let context = &mut *self.context;
+        let location = self.current_location;
 
         self.builder
             .build_nested_function_with_properties(kind, mode, properties, |builder| {
-                let mut lowerer = FunctionLowerer::new(builder, context);
+                let mut lowerer = FunctionLowerer::new(builder, context, location);
 
                 build(&mut lowerer)
             })
@@ -109,8 +114,12 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
 
         match build(self) {
             Ok(value) => {
-                self.builder
-                    .finish_region(region, [value], self.unwind_target);
+                self.builder.finish_region(
+                    region,
+                    self.current_location,
+                    [value],
+                    self.unwind_target,
+                );
                 Ok(region)
             }
             Err(error) => {
@@ -266,6 +275,17 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         self.builder.has_arguments_environment()
     }
 
+    /// Lowers within the source location of one syntax node.
+    pub(crate) fn with_span<R>(&mut self, span: Span, lower: impl FnOnce(&mut Self) -> R) -> R {
+        let location = self.location(span);
+        let previous = std::mem::replace(&mut self.current_location, location);
+        let result = lower(self);
+
+        self.current_location = previous;
+
+        result
+    }
+
     /// Emits an operation at the current insertion block.
     pub(crate) fn emit(
         &mut self,
@@ -273,7 +293,7 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         operands: impl IntoIterator<Item = ValueId>,
     ) -> OperationId {
         self.builder
-            .append_operation(kind, operands, self.unwind_target)
+            .append_operation(self.current_location, kind, operands, self.unwind_target)
     }
 
     /// Returns the values produced by an emitted operation.
@@ -302,6 +322,14 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
     ) -> OperationId {
-        self.builder.terminate(kind, operands, self.unwind_target)
+        self.builder
+            .terminate(self.current_location, kind, operands, self.unwind_target)
+    }
+
+    fn location(&mut self, span: Span) -> LocationId {
+        self.builder.source_location(
+            self.context.source_file(),
+            TextRange::new(span.start, span.end),
+        )
     }
 }

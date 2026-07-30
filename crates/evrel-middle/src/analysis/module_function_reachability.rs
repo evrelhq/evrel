@@ -90,11 +90,13 @@ mod tests {
                 builder.create_function(FunctionKind::Ordinary, FunctionMode::Normal, entry);
 
             builder.function_builder(entry).append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(outer)),
                 [],
                 UnwindTarget::Propagate,
             );
             builder.function_builder(outer).append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(inner)),
                 [],
                 UnwindTarget::Propagate,
@@ -123,6 +125,7 @@ mod tests {
             let inner = builder.create_function(FunctionKind::Arrow, FunctionMode::Normal, outer);
 
             builder.function_builder(entry).append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(inner)),
                 [],
                 UnwindTarget::Propagate,

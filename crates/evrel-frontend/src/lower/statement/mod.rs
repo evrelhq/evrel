@@ -22,6 +22,7 @@ mod variable;
 mod while_statement;
 
 use oxc_ast::ast::{Declaration, ImportOrExportKind, Statement};
+use oxc_span::GetSpan;
 
 use crate::{FrontendError, lower::FunctionLowerer};
 
@@ -43,6 +44,17 @@ pub(super) fn lower_statement_list(
 
 /// Lowers one JavaScript statement.
 pub(super) fn lower_statement(
+    lowerer: &mut FunctionLowerer<'_, '_, '_>,
+    statement: &Statement<'_>,
+) -> Result<(), FrontendError> {
+    let span = statement.span();
+
+    lowerer.with_span(span, |lowerer| {
+        lower_statement_at_current_location(lowerer, statement)
+    })
+}
+
+fn lower_statement_at_current_location(
     lowerer: &mut FunctionLowerer<'_, '_, '_>,
     statement: &Statement<'_>,
 ) -> Result<(), FrontendError> {

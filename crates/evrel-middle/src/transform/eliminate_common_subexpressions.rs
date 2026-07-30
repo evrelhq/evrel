@@ -215,6 +215,7 @@ mod tests {
             let (repeated, repeated_result) = append_addition(&mut builder, left, right);
 
             let returned = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
                 UnwindTarget::Propagate,
@@ -257,6 +258,7 @@ mod tests {
             let (first, first_result) = append_addition(&mut builder, left, right);
 
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(successor, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -265,6 +267,7 @@ mod tests {
             builder.switch_to_block(successor);
             let (repeated, repeated_result) = append_addition(&mut builder, left, right);
             let returned = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
                 UnwindTarget::Propagate,
@@ -308,6 +311,7 @@ mod tests {
             let operand_right = append_number(&mut builder, 22.0);
 
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::LoadThis(LoadThisOp::new()),
                 [],
                 UnwindTarget::Propagate,
@@ -315,6 +319,7 @@ mod tests {
             let condition = builder.operation_results(condition)[0];
 
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left_block, 0),
                     BlockTarget::new(right_block, 0),
@@ -328,6 +333,7 @@ mod tests {
             let (left_addition, left_result) =
                 append_addition(&mut builder, operand_left, operand_right);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [left_result],
                 UnwindTarget::Propagate,
@@ -337,6 +343,7 @@ mod tests {
             let (right_addition, right_result) =
                 append_addition(&mut builder, operand_left, operand_right);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [right_result],
                 UnwindTarget::Propagate,
@@ -345,6 +352,7 @@ mod tests {
             builder.switch_to_block(completion);
             let undefined = append_undefined(&mut builder);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [undefined],
                 UnwindTarget::Propagate,
@@ -374,6 +382,7 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let unknown = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
                 [],
                 UnwindTarget::Propagate,
@@ -385,6 +394,7 @@ mod tests {
             let (repeated, repeated_result) = append_addition(&mut builder, unknown, one);
 
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
                 UnwindTarget::Propagate,
@@ -410,6 +420,7 @@ mod tests {
         right: ValueId,
     ) -> (OperationId, ValueId) {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [left, right],
             UnwindTarget::Propagate,
@@ -420,6 +431,7 @@ mod tests {
 
     fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,
@@ -430,6 +442,7 @@ mod tests {
 
     fn append_undefined(builder: &mut evrel_ir::FunctionBuilder<'_>) -> ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
             UnwindTarget::Propagate,

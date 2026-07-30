@@ -351,6 +351,7 @@ mod tests {
                 let then_value = append_number(&mut builder, 1.0);
                 let else_value = append_number(&mut builder, 2.0);
                 let terminator = builder.terminate(
+                    evrel_ir::LocationId::UNKNOWN,
                     OperationKind::If(IfOp::new(
                         BlockTarget::new(then_block, 1),
                         BlockTarget::new(else_block, 1),
@@ -362,6 +363,7 @@ mod tests {
 
                 builder.switch_to_block(then_block);
                 builder.terminate(
+                    evrel_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [then_parameter],
                     UnwindTarget::Propagate,
@@ -369,6 +371,7 @@ mod tests {
 
                 builder.switch_to_block(else_block);
                 builder.terminate(
+                    evrel_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [else_parameter],
                     UnwindTarget::Propagate,
@@ -377,6 +380,7 @@ mod tests {
                 builder.switch_to_block(completion);
                 let completion_value = append_number(&mut builder, 0.0);
                 builder.terminate(
+                    evrel_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [completion_value],
                     UnwindTarget::Propagate,
@@ -430,6 +434,7 @@ mod tests {
 
             let condition = append_unknown_condition(&mut builder);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -442,6 +447,7 @@ mod tests {
             builder.switch_to_block(left);
             let left_value = append_number(&mut builder, 1.0);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                 [left_value],
                 UnwindTarget::Propagate,
@@ -450,6 +456,7 @@ mod tests {
             builder.switch_to_block(right);
             let right_value = append_number(&mut builder, 2.0);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                 [right_value],
                 UnwindTarget::Propagate,
@@ -457,6 +464,7 @@ mod tests {
 
             builder.switch_to_block(forwarding);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 1))),
                 [forwarding_parameter],
                 UnwindTarget::Propagate,
@@ -464,6 +472,7 @@ mod tests {
 
             builder.switch_to_block(target);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [target_parameter],
                 UnwindTarget::Propagate,
@@ -509,6 +518,7 @@ mod tests {
             let argument = append_number(&mut builder, 42.0);
 
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(middle, 1))),
                 [argument],
                 UnwindTarget::Propagate,
@@ -516,6 +526,7 @@ mod tests {
 
             builder.switch_to_block(middle);
             let returned = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -555,6 +566,7 @@ mod tests {
 
             let condition = append_unknown_condition(&mut builder);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -568,6 +580,7 @@ mod tests {
                 builder.switch_to_block(block);
                 let value = append_number(&mut builder, value);
                 builder.terminate(
+                    evrel_ir::LocationId::UNKNOWN,
                     OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                     [value],
                     UnwindTarget::Propagate,
@@ -576,6 +589,7 @@ mod tests {
 
             builder.switch_to_block(forwarding);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -583,6 +597,7 @@ mod tests {
 
             builder.switch_to_block(target);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -609,6 +624,7 @@ mod tests {
         value: bool,
     ) -> evrel_ir::ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(value))),
             [],
             UnwindTarget::Propagate,
@@ -619,6 +635,7 @@ mod tests {
 
     fn append_unknown_condition(builder: &mut evrel_ir::FunctionBuilder<'_>) -> evrel_ir::ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::LoadThis(LoadThisOp::new()),
             [],
             UnwindTarget::Propagate,
@@ -629,6 +646,7 @@ mod tests {
 
     fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> evrel_ir::ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,

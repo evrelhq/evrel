@@ -135,12 +135,14 @@ mod tests {
             let join = builder.create_block();
 
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -152,6 +154,7 @@ mod tests {
 
             builder.switch_to_block(left);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -159,6 +162,7 @@ mod tests {
 
             builder.switch_to_block(right);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -191,6 +195,7 @@ mod tests {
             let exit = builder.create_block();
 
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -198,12 +203,14 @@ mod tests {
 
             builder.switch_to_block(header);
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(body, 0),
                     BlockTarget::new(exit, 0),
@@ -215,6 +222,7 @@ mod tests {
 
             builder.switch_to_block(body);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -249,12 +257,14 @@ mod tests {
             let second_join = builder.create_block();
 
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(first_split, 0),
                     BlockTarget::new(bypass, 0),
@@ -266,12 +276,14 @@ mod tests {
 
             builder.switch_to_block(first_split);
             let condition = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -284,6 +296,7 @@ mod tests {
             for block in [left, right] {
                 builder.switch_to_block(block);
                 builder.terminate(
+                    evrel_ir::LocationId::UNKNOWN,
                     OperationKind::Jump(JumpOp::new(BlockTarget::new(first_join, 0))),
                     [],
                     UnwindTarget::Propagate,
@@ -292,6 +305,7 @@ mod tests {
 
             builder.switch_to_block(first_join);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(second_join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -299,6 +313,7 @@ mod tests {
 
             builder.switch_to_block(bypass);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(second_join, 0))),
                 [],
                 UnwindTarget::Propagate,

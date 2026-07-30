@@ -9,6 +9,59 @@ fn infers_source_type_from_the_source_name() {
 }
 
 #[test]
+fn records_exact_source_ranges_for_lowered_operations() {
+    let source = "console[20 + 22];";
+    let module = lower_source_file("input.mjs", source).unwrap();
+    let function = module.function(module.entry_function()).unwrap();
+
+    let ranges = function
+        .operations()
+        .filter_map(|(_, operation)| {
+            let CompilerLocation::Source { file, range } =
+                module.location(operation.location()).unwrap()
+            else {
+                panic!("frontend operations must have concrete source locations");
+            };
+
+            match operation.kind() {
+                OperationKind::LoadGlobal(_) => Some(("global", *file, *range)),
+                OperationKind::Binary(_) => Some(("binary", *file, *range)),
+                OperationKind::LoadProperty(_) => Some(("property", *file, *range)),
+                _ => None,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(ranges.len(), 3);
+
+    let file = ranges[0].1;
+    assert_eq!(module.source_file(file).unwrap().name(), "input.mjs");
+    assert_eq!(module.source_file(file).unwrap().text(), source);
+    assert_eq!(ranges[0], ("global", file, TextRange::new(0, 7)));
+    assert_eq!(ranges[1], ("binary", file, TextRange::new(8, 15)));
+    assert_eq!(ranges[2], ("property", file, TextRange::new(0, 16)));
+}
+
+#[test]
+fn gives_every_lowered_operation_source_provenance() {
+    let source = "var value; function read() { return value; }";
+    let module = lower_source_file("input.mjs", source).unwrap();
+
+    for (_, function) in module.functions() {
+        for (_, operation) in function.operations() {
+            let CompilerLocation::Source { file, range } =
+                module.location(operation.location()).unwrap()
+            else {
+                panic!("frontend operations must not use unknown provenance");
+            };
+
+            assert_eq!(module.source_file(*file).unwrap().text(), source);
+            assert!(range.end() <= source.len() as u32);
+        }
+    }
+}
+
+#[test]
 fn retains_implicit_strictness_in_the_ir() {
     let module =
         lower_source_file("input.mjs", "export function read(value) { return value; }").unwrap();

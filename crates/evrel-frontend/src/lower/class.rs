@@ -9,6 +9,7 @@ use oxc_ast::ast::{
     Class, ClassElement as OxcClassElement, Expression, MethodDefinition, MethodDefinitionKind,
     PropertyDefinition, PropertyKey, StaticBlock as OxcStaticBlock,
 };
+use oxc_span::GetSpan;
 use oxc_syntax::number::ToJsString;
 
 use crate::FrontendError;
@@ -71,21 +72,17 @@ fn lower_class_elements(
     let mut elements = Vec::with_capacity(class.body.body.len());
 
     for element in &class.body.body {
-        match element {
-            OxcClassElement::MethodDefinition(method) => {
-                elements.push(lower_method(lowerer, method)?);
-            }
+        let lowered = lowerer.with_span(element.span(), |lowerer| match element {
+            OxcClassElement::MethodDefinition(method) => lower_method(lowerer, method),
 
-            OxcClassElement::PropertyDefinition(field) => {
-                elements.push(lower_class_field(lowerer, field)?);
-            }
+            OxcClassElement::PropertyDefinition(field) => lower_class_field(lowerer, field),
 
-            OxcClassElement::StaticBlock(block) => {
-                elements.push(lower_class_static_block(lowerer, block)?);
-            }
+            OxcClassElement::StaticBlock(block) => lower_class_static_block(lowerer, block),
 
-            _ => return Err(FrontendError::UnsupportedExpression),
-        }
+            _ => Err(FrontendError::UnsupportedExpression),
+        })?;
+
+        elements.push(lowered);
     }
 
     Ok(elements)

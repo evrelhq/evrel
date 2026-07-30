@@ -8,6 +8,7 @@ use oxc_ast::ast::{
     Declaration, ExportDefaultDeclarationKind, ImportOrExportKind, Statement, SwitchStatement,
 };
 use oxc_semantic::{ScopeId, Scoping, SymbolFlags, SymbolId};
+use oxc_span::GetSpan;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{FrontendError, lower::FunctionLowerer};
@@ -111,15 +112,19 @@ fn initialize_root_var_bindings(
         }
 
         let binding = lowerer.binding_for_symbol(symbol);
-        let undefined = lowerer.emit_value(
-            OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
-            [],
-        );
+        let span = lowerer.scoping().symbol_span(symbol);
 
-        lowerer.emit(
-            OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
-            [undefined],
-        );
+        lowerer.with_span(span, |lowerer| {
+            let undefined = lowerer.emit_value(
+                OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
+                [],
+            );
+
+            lowerer.emit(
+                OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
+                [undefined],
+            );
+        });
     }
 
     Ok(())
@@ -166,15 +171,19 @@ fn initialize_function_var_bindings(
         }
 
         let binding = lowerer.binding_for_symbol(symbol);
-        let undefined = lowerer.emit_value(
-            OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
-            [],
-        );
+        let span = lowerer.scoping().symbol_span(symbol);
 
-        lowerer.emit(
-            OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
-            [undefined],
-        );
+        lowerer.with_span(span, |lowerer| {
+            let undefined = lowerer.emit_value(
+                OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
+                [],
+            );
+
+            lowerer.emit(
+                OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
+                [undefined],
+            );
+        });
     }
 
     Ok(())
@@ -248,29 +257,33 @@ where
     declarations.reverse();
 
     for (declaration, binding, kind) in declarations {
-        let function = lower_ordinary_function_definition(lowerer, declaration)?;
-        let value = lowerer.emit_value(
-            OperationKind::CreateFunction(CreateFunctionOp::new(function)),
-            [],
-        );
+        lowerer.with_span(declaration.span(), |lowerer| {
+            let function = lower_ordinary_function_definition(lowerer, declaration)?;
+            let value = lowerer.emit_value(
+                OperationKind::CreateFunction(CreateFunctionOp::new(function)),
+                [],
+            );
 
-        match kind {
-            BindingKind::Parameter => {
-                lowerer.emit(
-                    OperationKind::StoreBinding(StoreBindingOp::new(binding)),
-                    [value],
-                );
+            match kind {
+                BindingKind::Parameter => {
+                    lowerer.emit(
+                        OperationKind::StoreBinding(StoreBindingOp::new(binding)),
+                        [value],
+                    );
+                }
+
+                BindingKind::Function => {
+                    lowerer.emit(
+                        OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
+                        [value],
+                    );
+                }
+
+                kind => panic!("unexpected function declaration binding kind: {kind:?}"),
             }
 
-            BindingKind::Function => {
-                lowerer.emit(
-                    OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
-                    [value],
-                );
-            }
-
-            kind => panic!("unexpected function declaration binding kind: {kind:?}"),
-        }
+            Ok::<_, FrontendError>(())
+        })?;
     }
 
     Ok(())

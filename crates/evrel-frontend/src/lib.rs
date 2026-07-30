@@ -13,7 +13,7 @@ pub use error::FrontendError;
 pub fn lower_source_file(source_name: &str, source_text: &str) -> Result<ModuleIr, FrontendError> {
     let source_type = source_type_from_name(source_name)?;
 
-    lower_module_with_source_type(source_text, source_type)
+    lower_module_with_source_type(source_name, source_text, source_type)
 }
 
 fn source_type_from_name(source_name: &str) -> Result<SourceType, FrontendError> {
@@ -24,11 +24,12 @@ fn source_type_from_name(source_name: &str) -> Result<SourceType, FrontendError>
 }
 
 fn lower_module_with_source_type(
+    source_name: &str,
     source: &str,
     source_type: SourceType,
 ) -> Result<ModuleIr, FrontendError> {
     let allocator = Allocator::new();
     let parsed = parse::parse_module(&allocator, source, source_type)?;
 
-    lower::lower_module(&parsed)
+    lower::lower_module(&parsed, source_name, source)
 }

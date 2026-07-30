@@ -1,6 +1,7 @@
 use evrel_ir::{
-    BindingKind, BlockParameterSource, ExceptionHandlerKind, ForOfKind, FunctionKind, FunctionMode,
-    LoopKind, ModuleIr, OperationKind, print_function, print_module,
+    BindingKind, BlockParameterSource, CompilerLocation, ExceptionHandlerKind, ForOfKind,
+    FunctionKind, FunctionMode, LoopKind, ModuleIr, OperationKind, TextRange, print_function,
+    print_module,
 };
 
 use evrel_frontend::{FrontendError, lower_source_file};

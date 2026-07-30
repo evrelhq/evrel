@@ -2,6 +2,7 @@
 
 use evrel_ir::{FunctionId, FunctionKind, FunctionMode};
 use oxc_ast::ast::{Function, FunctionType};
+use oxc_span::GetSpan;
 
 use crate::{
     FrontendError,
@@ -45,6 +46,16 @@ pub(crate) fn lower_class_element_function(
 }
 
 fn lower_function_definition(
+    lowerer: &mut FunctionLowerer<'_, '_, '_>,
+    function: &Function<'_>,
+    kind: FunctionKind,
+) -> Result<FunctionId, FrontendError> {
+    lowerer.with_span(function.span(), |lowerer| {
+        lower_function_definition_at_current_location(lowerer, function, kind)
+    })
+}
+
+fn lower_function_definition_at_current_location(
     lowerer: &mut FunctionLowerer<'_, '_, '_>,
     function: &Function<'_>,
     kind: FunctionKind,

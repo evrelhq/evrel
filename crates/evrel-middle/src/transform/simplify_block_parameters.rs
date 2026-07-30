@@ -246,6 +246,7 @@ mod tests {
             let condition = append_boolean(&mut builder, true);
             let value = append_number(&mut builder, 1.0);
             let branch = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(join, 1),
                     BlockTarget::new(join, 1),
@@ -257,6 +258,7 @@ mod tests {
 
             builder.switch_to_block(join);
             let returned = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -305,6 +307,7 @@ mod tests {
             let right = append_number(&mut builder, 2.0);
             let matching_value = append_number(&mut builder, 3.0);
             let branch = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(join, 2),
                     BlockTarget::new(join, 2),
@@ -316,12 +319,14 @@ mod tests {
 
             builder.switch_to_block(join);
             let comparison = builder.append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::StrictEqual)),
                 [distinct, matching],
                 UnwindTarget::Propagate,
             );
             let comparison_result = builder.operation_results(comparison)[0];
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [comparison_result],
                 UnwindTarget::Propagate,
@@ -381,6 +386,7 @@ mod tests {
             let left = append_number(&mut builder, 1.0);
             let right = append_number(&mut builder, 2.0);
             let branch = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(join, 1),
                     BlockTarget::new(join, 1),
@@ -393,6 +399,7 @@ mod tests {
             builder.switch_to_block(join);
             let undefined = append_undefined(&mut builder);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [undefined],
                 UnwindTarget::Propagate,
@@ -428,6 +435,7 @@ mod tests {
             let parameter = builder.append_block_parameter(header, BlockParameterSource::Forwarded);
             let initial = append_number(&mut builder, 1.0);
             let entry_jump = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
                 [initial],
                 UnwindTarget::Propagate,
@@ -436,6 +444,7 @@ mod tests {
             builder.switch_to_block(header);
             let condition = append_boolean(&mut builder, true);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(body, 0),
                     BlockTarget::new(exit, 0),
@@ -447,6 +456,7 @@ mod tests {
 
             builder.switch_to_block(body);
             let backedge = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -454,6 +464,7 @@ mod tests {
 
             builder.switch_to_block(exit);
             let returned = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -498,6 +509,7 @@ mod tests {
                 builder.append_block_parameter(completion, BlockParameterSource::Forwarded);
             let initial = append_number(&mut builder, 1.0);
             let entry_jump = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                 [initial],
                 UnwindTarget::Propagate,
@@ -505,6 +517,7 @@ mod tests {
 
             builder.switch_to_block(forwarding);
             let forwarding_jump = builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(completion, 1))),
                 [forwarded],
                 UnwindTarget::Propagate,
@@ -513,6 +526,7 @@ mod tests {
             builder.switch_to_block(completion);
             let undefined = append_undefined(&mut builder);
             builder.terminate(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [undefined],
                 UnwindTarget::Propagate,
@@ -573,6 +587,7 @@ mod tests {
 
     fn append_constant(builder: &mut FunctionBuilder<'_>, value: ConstantValue) -> ValueId {
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(value)),
             [],
             UnwindTarget::Propagate,

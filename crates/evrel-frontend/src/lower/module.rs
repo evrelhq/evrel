@@ -10,6 +10,7 @@ use oxc_ast::ast::{
 };
 use oxc_ecmascript::BoundNames;
 use oxc_semantic::{Scoping, SymbolId};
+use oxc_span::GetSpan;
 use rustc_hash::FxHashMap;
 
 use crate::{FrontendError, module_attributes::lower_module_attributes, parse::ParsedModule};
@@ -21,7 +22,11 @@ use super::{
 };
 
 /// Lowers a parsed JavaScript module into Evrel IR.
-pub(crate) fn lower_module(parsed: &ParsedModule<'_>) -> Result<ModuleIr, FrontendError> {
+pub(crate) fn lower_module(
+    parsed: &ParsedModule<'_>,
+    source_name: &str,
+    source_text: &str,
+) -> Result<ModuleIr, FrontendError> {
     let mut properties = if parsed.program().source_type.is_strict() {
         FunctionProperties::strict()
     } else {
@@ -39,6 +44,12 @@ pub(crate) fn lower_module(parsed: &ParsedModule<'_>) -> Result<ModuleIr, Fronte
 
     {
         let mut module_builder = ModuleBuilder::new(&mut module);
+        let source_file = module_builder.add_source_file(source_name, source_text);
+        let program_span = parsed.program().span();
+        let program_location = module_builder.source_location(
+            source_file,
+            evrel_ir::TextRange::new(program_span.start, program_span.end),
+        );
         let bindings_by_symbol = declare_root_bindings(
             &mut module_builder,
             parsed.scoping(),
@@ -55,11 +66,15 @@ pub(crate) fn lower_module(parsed: &ParsedModule<'_>) -> Result<ModuleIr, Fronte
             parsed.scoping(),
             &bindings_by_symbol,
         )?;
-        let mut context =
-            LoweringContext::new(parsed.scoping(), bindings_by_symbol, default_export_binding);
+        let mut context = LoweringContext::new(
+            parsed.scoping(),
+            bindings_by_symbol,
+            default_export_binding,
+            source_file,
+        );
         let entry_function = module_builder.entry_function();
         let function_builder = module_builder.function_builder(entry_function);
-        let mut lowerer = FunctionLowerer::new(function_builder, &mut context);
+        let mut lowerer = FunctionLowerer::new(function_builder, &mut context, program_location);
 
         instantiate_root_scope(&mut lowerer, parsed.scoping(), &parsed.program().body)?;
 

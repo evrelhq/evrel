@@ -16,6 +16,7 @@ fn replaces_a_proven_effect_free_result_with_a_constant() {
         let mut builder = module_builder.function_builder(function);
         let operand = append_boolean(&mut builder, true);
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
             [operand],
             UnwindTarget::Propagate,
@@ -23,6 +24,7 @@ fn replaces_a_proven_effect_free_result_with_a_constant() {
         let result = builder.operation_results(operation)[0];
 
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
             UnwindTarget::Propagate,
@@ -58,12 +60,14 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
         let joined = builder.append_block_parameter(join_block, BlockParameterSource::Forwarded);
 
         let condition = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new("condition")),
             [],
             UnwindTarget::Propagate,
         );
         let condition = builder.operation_results(condition)[0];
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::If(IfOp::new(
                 BlockTarget::new(then_block, 0),
                 BlockTarget::new(else_block, 0),
@@ -76,6 +80,7 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
         builder.switch_to_block(then_block);
         let then_value = append_boolean(&mut builder, true);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [then_value],
             UnwindTarget::Propagate,
@@ -84,6 +89,7 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
         builder.switch_to_block(else_block);
         let else_value = append_boolean(&mut builder, true);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [else_value],
             UnwindTarget::Propagate,
@@ -91,12 +97,14 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
 
         builder.switch_to_block(join_block);
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
             [joined],
             UnwindTarget::Propagate,
         );
         let result = builder.operation_results(operation)[0];
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
             UnwindTarget::Propagate,
@@ -129,6 +137,7 @@ fn replaces_proven_non_throwing_numeric_addition() {
         let left = append_number(&mut builder, 20.0);
         let right = append_number(&mut builder, 22.0);
         let addition = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [left, right],
             UnwindTarget::Propagate,
@@ -136,6 +145,7 @@ fn replaces_proven_non_throwing_numeric_addition() {
         let result = builder.operation_results(addition)[0];
 
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
             UnwindTarget::Propagate,
@@ -167,6 +177,7 @@ fn ignores_existing_constants_and_reaches_a_fixed_point() {
         let mut builder = module_builder.function_builder(function);
         let operand = append_boolean(&mut builder, false);
         let operation = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
             [operand],
             UnwindTarget::Propagate,
@@ -174,6 +185,7 @@ fn ignores_existing_constants_and_reaches_a_fixed_point() {
         let result = builder.operation_results(operation)[0];
 
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
             UnwindTarget::Propagate,
@@ -203,6 +215,7 @@ fn skips_a_function_with_implicit_local_exception_flow() {
 
         let operand = append_boolean(&mut builder, true);
         let candidate = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
             [operand],
             UnwindTarget::Propagate,
@@ -210,11 +223,13 @@ fn skips_a_function_with_implicit_local_exception_flow() {
         let candidate_result = builder.operation_results(candidate)[0];
 
         builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new("possiblyMissing")),
             [],
             UnwindTarget::Handler(handler),
         );
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [candidate_result],
             UnwindTarget::Propagate,
@@ -240,6 +255,7 @@ fn skips_a_function_with_implicit_local_exception_flow() {
 
 fn append_boolean(builder: &mut evrel_ir::FunctionBuilder<'_>, value: bool) -> ValueId {
     let operation = builder.append_operation(
+        evrel_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(value))),
         [],
         UnwindTarget::Propagate,
@@ -250,6 +266,7 @@ fn append_boolean(builder: &mut evrel_ir::FunctionBuilder<'_>, value: bool) -> V
 
 fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
     let operation = builder.append_operation(
+        evrel_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
         [],
         UnwindTarget::Propagate,

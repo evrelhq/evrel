@@ -18,6 +18,7 @@ fn propagates_constants_through_straight_line_ssa() {
         let left = append_number(&mut builder, 20.0);
         let right = append_number(&mut builder, 22.0);
         let addition = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [left, right],
             UnwindTarget::Propagate,
@@ -25,6 +26,7 @@ fn propagates_constants_through_straight_line_ssa() {
         let result = builder.operation_results(addition)[0];
 
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
             UnwindTarget::Propagate,
@@ -60,6 +62,7 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
 
         let condition = append_boolean(&mut builder, true);
         let branch = builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::If(IfOp::new(
                 BlockTarget::new(then_block, 0),
                 BlockTarget::new(else_block, 0),
@@ -72,6 +75,7 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
         builder.switch_to_block(then_block);
         let then_value = append_number(&mut builder, 1.0);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [then_value],
             UnwindTarget::Propagate,
@@ -80,6 +84,7 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
         builder.switch_to_block(else_block);
         let else_value = append_number(&mut builder, 2.0);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [else_value],
             UnwindTarget::Propagate,
@@ -87,6 +92,7 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
 
         builder.switch_to_block(join_block);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [joined],
             UnwindTarget::Propagate,
@@ -156,6 +162,7 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
         let backedge = append_number(&mut builder, 2.0);
         let zero = append_number(&mut builder, 0.0);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
             [initial],
             UnwindTarget::Propagate,
@@ -163,18 +170,21 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
 
         builder.switch_to_block(header);
         let derived = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [carried, zero],
             UnwindTarget::Propagate,
         );
         let derived = builder.operation_results(derived)[0];
         let condition = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new("repeat")),
             [],
             UnwindTarget::Propagate,
         );
         let condition = builder.operation_results(condition)[0];
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::If(IfOp::new(
                 BlockTarget::new(body, 0),
                 BlockTarget::new(exit, 0),
@@ -186,6 +196,7 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
 
         builder.switch_to_block(body);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
             [backedge],
             UnwindTarget::Propagate,
@@ -193,6 +204,7 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
 
         builder.switch_to_block(exit);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [derived],
             UnwindTarget::Propagate,
@@ -229,12 +241,14 @@ fn build_dynamic_diamond(
         let joined = builder.append_block_parameter(join_block, BlockParameterSource::Forwarded);
 
         let condition = builder.append_operation(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new("condition")),
             [],
             UnwindTarget::Propagate,
         );
         let condition = builder.operation_results(condition)[0];
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::If(IfOp::new(
                 BlockTarget::new(then_block, 0),
                 BlockTarget::new(else_block, 0),
@@ -247,6 +261,7 @@ fn build_dynamic_diamond(
         builder.switch_to_block(then_block);
         let then_value = append_number(&mut builder, then_number);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [then_value],
             UnwindTarget::Propagate,
@@ -255,6 +270,7 @@ fn build_dynamic_diamond(
         builder.switch_to_block(else_block);
         let else_value = append_number(&mut builder, else_number);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [else_value],
             UnwindTarget::Propagate,
@@ -262,6 +278,7 @@ fn build_dynamic_diamond(
 
         builder.switch_to_block(join_block);
         builder.terminate(
+            evrel_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [joined],
             UnwindTarget::Propagate,
@@ -275,6 +292,7 @@ fn build_dynamic_diamond(
 
 fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
     let operation = builder.append_operation(
+        evrel_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
         [],
         UnwindTarget::Propagate,
@@ -285,6 +303,7 @@ fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> Val
 
 fn append_boolean(builder: &mut evrel_ir::FunctionBuilder<'_>, value: bool) -> ValueId {
     let operation = builder.append_operation(
+        evrel_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(value))),
         [],
         UnwindTarget::Propagate,

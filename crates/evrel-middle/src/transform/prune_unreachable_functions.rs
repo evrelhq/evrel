@@ -50,6 +50,7 @@ mod tests {
                 builder.create_binding(unreachable, "local", BindingKind::Let);
 
             builder.function_builder(entry).append_operation(
+                evrel_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(reachable)),
                 [],
                 UnwindTarget::Propagate,
