@@ -5,8 +5,8 @@ use evrel_frontend::lower_source_file;
 use evrel_ir::{FunctionIr, ModuleIr};
 use evrel_middle::transform::{
     eliminate_common_subexpressions, eliminate_dead_code, promote_bindings_to_ssa,
-    propagate_constants, prune_unreachable_blocks, simplify_block_parameters,
-    simplify_control_flow, simplify_operations,
+    propagate_constants, prune_unreachable_blocks, prune_unreachable_functions,
+    simplify_block_parameters, simplify_control_flow, simplify_operations,
 };
 use rayon::prelude::*;
 
@@ -73,6 +73,8 @@ fn compile_module(module: &mut ModuleIr) -> Result<CompileOutput, CompilerError>
             .functions_mut()
             .for_each(|(_, function)| optimize_function(function));
     }
+
+    prune_unreachable_functions(module);
 
     let code = generate(module)?;
 
