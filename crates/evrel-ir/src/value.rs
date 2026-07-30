@@ -45,6 +45,18 @@ impl ValueData {
 
         self.uses.remove(index);
     }
+
+    pub(crate) fn set_block_parameter_index(&mut self, parameter_index: u32) {
+        let ValueDefinition::BlockParameter {
+            parameter_index: current,
+            ..
+        } = &mut self.definition
+        else {
+            panic!("only block parameters have a block parameter index");
+        };
+
+        *current = parameter_index;
+    }
 }
 
 /// Describes where an IR value originates.

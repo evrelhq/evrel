@@ -150,6 +150,34 @@ impl OperationData {
 
         operand_index
     }
+
+    pub(crate) fn remove_successor_argument(
+        &mut self,
+        successor_index: usize,
+        argument_index: usize,
+    ) -> (usize, ValueId) {
+        let successor = self
+            .successors()
+            .get(successor_index)
+            .copied()
+            .expect("operation has no such successor");
+
+        assert!(
+            argument_index < successor.target().argument_count(),
+            "successor has no such forwarded argument",
+        );
+
+        let operand_index = successor.argument_operand_range().start + argument_index;
+        let argument = self.operands.remove(operand_index);
+
+        self.kind
+            .successor_target_mut(successor_index)
+            .remove_argument();
+
+        debug_assert_eq!(self.operands.len(), self.kind.operand_count());
+
+        (operand_index, argument)
+    }
 }
 
 /// The behavior performed by an IR operation.

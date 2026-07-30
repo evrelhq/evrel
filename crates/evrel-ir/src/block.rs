@@ -81,6 +81,10 @@ impl BasicBlockData {
         self.parameters.push(parameter);
     }
 
+    pub(crate) fn remove_parameter(&mut self, parameter_index: usize) -> BlockParameter {
+        self.parameters.remove(parameter_index)
+    }
+
     pub(crate) fn append_operation(&mut self, operation: OperationId) {
         assert!(
             self.terminator.is_none(),

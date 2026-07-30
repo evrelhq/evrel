@@ -40,6 +40,13 @@ impl BlockTarget {
             .checked_add(1)
             .expect("block-target argument count overflow");
     }
+
+    pub(crate) fn remove_argument(&mut self) {
+        self.argument_count = self
+            .argument_count
+            .checked_sub(1)
+            .expect("cannot remove an argument from an empty block target");
+    }
 }
 
 /// One executable control-flow successor.

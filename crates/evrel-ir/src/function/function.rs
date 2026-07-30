@@ -743,6 +743,158 @@ impl FunctionIr {
         parameters
     }
 
+    pub(crate) fn remove_forwarded_block_parameter(
+        &mut self,
+        block: BlockId,
+        forwarded_index: usize,
+    ) -> ValueId {
+        let (parameter_index, parameter) = {
+            let block = self
+                .blocks
+                .get(block)
+                .expect("cannot remove a parameter from an unknown block");
+
+            block
+                .parameters()
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|(_, parameter)| parameter.source() == BlockParameterSource::Forwarded)
+                .nth(forwarded_index)
+                .expect("block has no such forwarded parameter")
+        };
+
+        assert!(
+            self.values
+                .get(parameter.value())
+                .expect("block parameter must reference a live value")
+                .uses()
+                .is_empty(),
+            "cannot remove a block parameter with live uses",
+        );
+
+        let incoming_edges = self
+            .operations
+            .iter()
+            .flat_map(|(operation, data)| {
+                data.successors().into_iter().enumerate().filter_map(
+                    move |(successor_index, successor)| {
+                        (successor.target().block() == block)
+                            .then_some((operation, successor_index))
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            !incoming_edges.is_empty(),
+            "a forwarded block parameter requires an incoming edge",
+        );
+
+        for (operation, successor_index) in incoming_edges {
+            self.remove_successor_argument(operation, successor_index, forwarded_index);
+        }
+
+        let removed = self
+            .blocks
+            .get_mut(block)
+            .expect("block was validated above")
+            .remove_parameter(parameter_index);
+
+        debug_assert_eq!(removed, parameter);
+
+        let shifted_parameters = self
+            .blocks
+            .get(block)
+            .expect("block must remain live")
+            .parameters()[parameter_index..]
+            .to_vec();
+
+        for (offset, shifted) in shifted_parameters.into_iter().enumerate() {
+            self.values
+                .get_mut(shifted.value())
+                .expect("shifted block parameter must remain live")
+                .set_block_parameter_index(
+                    u32::try_from(parameter_index + offset)
+                        .expect("block parameter index must fit in u32"),
+                );
+        }
+
+        self.values
+            .remove(parameter.value())
+            .expect("removed block parameter was validated above");
+
+        parameter.value()
+    }
+
+    fn remove_successor_argument(
+        &mut self,
+        operation: OperationId,
+        successor_index: usize,
+        argument_index: usize,
+    ) {
+        let (operand_index, removed, shifted_operands) = {
+            let data = self
+                .operations
+                .get(operation)
+                .expect("cannot edit an unknown operation");
+            let successor = data
+                .successors()
+                .get(successor_index)
+                .copied()
+                .expect("operation has no such successor");
+            let operand_index = successor.argument_operand_range().start + argument_index;
+            let removed = *data
+                .operands()
+                .get(operand_index)
+                .expect("successor has no such forwarded argument");
+
+            (
+                operand_index,
+                removed,
+                data.operands()[operand_index + 1..].to_vec(),
+            )
+        };
+
+        self.values
+            .get_mut(removed)
+            .expect("removed argument must remain live")
+            .remove_use(ValueUse::new(
+                operation,
+                u32::try_from(operand_index).expect("operand index must fit in u32"),
+            ));
+
+        for (offset, value) in shifted_operands.iter().copied().enumerate() {
+            self.values
+                .get_mut(value)
+                .expect("shifted operand must remain live")
+                .remove_use(ValueUse::new(
+                    operation,
+                    u32::try_from(operand_index + offset + 1)
+                        .expect("operand index must fit in u32"),
+                ));
+        }
+
+        let (removed_index, removed_argument) = self
+            .operations
+            .get_mut(operation)
+            .expect("operation was validated above")
+            .remove_successor_argument(successor_index, argument_index);
+
+        debug_assert_eq!(removed_index, operand_index);
+        debug_assert_eq!(removed_argument, removed);
+
+        for (offset, value) in shifted_operands.into_iter().enumerate() {
+            self.values
+                .get_mut(value)
+                .expect("shifted operand must remain live")
+                .add_use(ValueUse::new(
+                    operation,
+                    u32::try_from(operand_index + offset).expect("operand index must fit in u32"),
+                ));
+        }
+    }
+
     pub(crate) fn create_region(&mut self, parent: RegionId, result_count: usize) -> RegionId {
         assert!(
             self.regions.get(parent).is_some(),

@@ -92,6 +92,18 @@ impl<'ir> FunctionEditor<'ir> {
         self.ir
             .append_forwarded_block_parameters(blocks, argument_for_edge)
     }
+
+    /// Removes an unused forwarded block parameter and its incoming arguments.
+    ///
+    /// `forwarded_index` counts only parameters whose source is `Forwarded`.
+    pub fn remove_forwarded_block_parameter(
+        &mut self,
+        block: BlockId,
+        forwarded_index: usize,
+    ) -> ValueId {
+        self.ir
+            .remove_forwarded_block_parameter(block, forwarded_index)
+    }
 }
 
 #[cfg(test)]
@@ -99,6 +111,7 @@ mod tests {
     use crate::{
         BinaryOp, BinaryOperator, BlockParameterSource, BlockTarget, ConstantOp, ConstantValue,
         IfOp, JumpOp, ModuleBuilder, ModuleIr, OperationKind, ReturnOp, UnwindTarget,
+        ValueDefinition,
     };
 
     use super::FunctionEditor;
@@ -542,5 +555,99 @@ mod tests {
             editor.ir().operation(second_jump).unwrap().operands(),
             [second_parameter],
         );
+    }
+
+    #[test]
+    fn removes_a_forwarded_parameter_and_repairs_shifted_indices() {
+        let mut module = ModuleIr::new();
+        let function = module.entry_function();
+
+        let (
+            join,
+            first_parameter,
+            second_parameter,
+            branch,
+            first_then,
+            second_then,
+            first_else,
+            second_else,
+        ) = {
+            let mut module_builder = ModuleBuilder::new(&mut module);
+            let mut builder = module_builder.function_builder(function);
+            let join = builder.create_block();
+            let first_parameter =
+                builder.append_block_parameter(join, BlockParameterSource::Forwarded);
+            let second_parameter =
+                builder.append_block_parameter(join, BlockParameterSource::Forwarded);
+
+            let condition = append_number(&mut builder, 0.0);
+            let first_then = append_number(&mut builder, 1.0);
+            let second_then = append_number(&mut builder, 2.0);
+            let first_else = append_number(&mut builder, 3.0);
+            let second_else = append_number(&mut builder, 4.0);
+            let branch = builder.terminate(
+                OperationKind::If(IfOp::new(
+                    BlockTarget::new(join, 2),
+                    BlockTarget::new(join, 2),
+                    join,
+                )),
+                [condition, first_then, second_then, first_else, second_else],
+                UnwindTarget::Propagate,
+            );
+
+            (
+                join,
+                first_parameter,
+                second_parameter,
+                branch,
+                first_then,
+                second_then,
+                first_else,
+                second_else,
+            )
+        };
+
+        let function = module.function_mut(function).unwrap();
+        let mut editor = FunctionEditor::new(function);
+
+        assert_eq!(
+            editor.remove_forwarded_block_parameter(join, 0),
+            first_parameter,
+        );
+
+        let operation = editor.ir().operation(branch).unwrap();
+        let successors = operation.successors();
+
+        assert!(editor.ir().value(first_parameter).is_none());
+        assert_eq!(editor.ir().block(join).unwrap().parameters().len(), 1);
+        assert_eq!(
+            editor.ir().value(second_parameter).unwrap().definition(),
+            &ValueDefinition::BlockParameter {
+                block: join,
+                parameter_index: 0,
+            },
+        );
+        assert_eq!(successors[0].arguments(operation.operands()), [second_then],);
+        assert_eq!(successors[1].arguments(operation.operands()), [second_else],);
+        assert!(editor.ir().value(first_then).unwrap().uses().is_empty());
+        assert!(editor.ir().value(first_else).unwrap().uses().is_empty());
+        assert_eq!(
+            editor.ir().value(second_then).unwrap().uses()[0].operand_index(),
+            1,
+        );
+        assert_eq!(
+            editor.ir().value(second_else).unwrap().uses()[0].operand_index(),
+            2,
+        );
+    }
+
+    fn append_number(builder: &mut crate::FunctionBuilder<'_>, value: f64) -> crate::ValueId {
+        let operation = builder.append_operation(
+            OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
+            [],
+            UnwindTarget::Propagate,
+        );
+
+        builder.operation_results(operation)[0]
     }
 }
