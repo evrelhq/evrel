@@ -48,7 +48,7 @@ fn compiles_a_tsx_file_to_stdout() {
     assert!(compile(CompileInput::new("output.jsx", &stdout)).is_ok());
     assert!(stdout.contains("Button"));
     assert!(stdout.contains("enabled"));
-    assert!(stdout.contains("20 + 22"));
+    assert!(stdout.contains("{42}"));
     assert!(!stdout.contains(": object"));
     assert!(output.stderr.is_empty());
 }

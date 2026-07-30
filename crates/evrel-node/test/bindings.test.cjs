@@ -29,7 +29,7 @@ test("compiles TSX based on the filename", async () => {
   assert.match(output.code, /\.Button/);
   assert.match(output.code, /enabled/);
   assert.match(output.code, /\{\.\.\.[^}]+\}/);
-  assert.match(output.code, /20 \+ 22/);
+  assert.match(output.code, /\{42\}/);
   assert.doesNotMatch(output.code, /: object/);
 });
 
