@@ -6,15 +6,16 @@ use evrel_ir::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::analysis::RegionControlFlowGraph;
+use crate::analysis::{FunctionValueAnalysis, RegionControlFlowGraph};
 
-/// Removes forwarding blocks and merges linear block chains.
+/// Folds constant conditions, removes forwarding blocks, and merges linear
+/// block chains.
 ///
-/// Each rewrite removes exactly one block. Control flow is recomputed after
-/// every mutation, keeping planning immutable and guaranteeing termination
-/// without an iteration limit.
+/// Constant-condition planning uses one immutable value-analysis snapshot.
+/// Local structural rewrites recompute regional control flow after every
+/// mutation.
 ///
-/// Returns the number of removed blocks.
+/// Returns the number of applied control-flow rewrites.
 pub fn simplify_control_flow(module: &mut ModuleIr) -> usize {
     module
         .functions_mut()
@@ -23,14 +24,52 @@ pub fn simplify_control_flow(module: &mut ModuleIr) -> usize {
 }
 
 fn simplify_function(function: &mut FunctionIr) -> usize {
-    let mut removed = 0;
+    let mut rewritten = fold_constant_ifs(function);
 
     while let Some(rewrite) = find_rewrite(function) {
         apply_rewrite(function, rewrite);
-        removed += 1;
+        rewritten += 1;
     }
 
-    removed
+    rewritten
+}
+
+struct FoldConstantIf {
+    terminator: OperationId,
+    successor_index: usize,
+}
+
+fn fold_constant_ifs(function: &mut FunctionIr) -> usize {
+    let rewrites = {
+        let Ok(analysis) = FunctionValueAnalysis::compute(function) else {
+            return 0;
+        };
+
+        function
+            .operations()
+            .filter_map(|(operation, data)| {
+                if !matches!(data.kind(), OperationKind::If(_)) {
+                    return None;
+                }
+
+                let successor_index = analysis.unique_executable_successor(function, operation)?;
+
+                Some(FoldConstantIf {
+                    terminator: operation,
+                    successor_index,
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let rewritten = rewrites.len();
+    let mut editor = FunctionEditor::new(function);
+
+    for rewrite in rewrites {
+        editor.replace_if_with_jump(rewrite.terminator, rewrite.successor_index);
+    }
+
+    rewritten
 }
 
 enum Rewrite {
@@ -294,11 +333,91 @@ fn block_has_boundary_role(function: &FunctionIr, block: BlockId) -> bool {
 #[cfg(test)]
 mod tests {
     use evrel_ir::{
-        BlockParameterSource, BlockTarget, ConstantOp, ConstantValue, IfOp, JumpOp, ModuleBuilder,
-        ModuleIr, OperationKind, ReturnOp, UnwindTarget,
+        BlockParameterSource, BlockTarget, ConstantOp, ConstantValue, IfOp, JumpOp, LoadThisOp,
+        ModuleBuilder, ModuleIr, OperationKind, ReturnOp, UnwindTarget,
     };
 
-    use super::simplify_control_flow;
+    use super::{fold_constant_ifs, simplify_control_flow};
+
+    #[test]
+    fn folds_truthy_and_falsy_conditions_and_repairs_uses() {
+        for condition in [true, false] {
+            let mut module = ModuleIr::new();
+            let function = module.entry_function();
+
+            let (terminator, condition_value, then_block, else_block, then_value, else_value) = {
+                let mut module_builder = ModuleBuilder::new(&mut module);
+                let mut builder = module_builder.function_builder(function);
+                let then_block = builder.create_block();
+                let else_block = builder.create_block();
+                let completion = builder.create_block();
+                let then_parameter =
+                    builder.append_block_parameter(then_block, BlockParameterSource::Forwarded);
+                let else_parameter =
+                    builder.append_block_parameter(else_block, BlockParameterSource::Forwarded);
+                let condition_value = append_boolean(&mut builder, condition);
+                let then_value = append_number(&mut builder, 1.0);
+                let else_value = append_number(&mut builder, 2.0);
+                let terminator = builder.terminate(
+                    OperationKind::If(IfOp::new(
+                        BlockTarget::new(then_block, 1),
+                        BlockTarget::new(else_block, 1),
+                        completion,
+                    )),
+                    [condition_value, then_value, else_value],
+                    UnwindTarget::Propagate,
+                );
+
+                builder.switch_to_block(then_block);
+                builder.terminate(
+                    OperationKind::Return(ReturnOp::new()),
+                    [then_parameter],
+                    UnwindTarget::Propagate,
+                );
+
+                builder.switch_to_block(else_block);
+                builder.terminate(
+                    OperationKind::Return(ReturnOp::new()),
+                    [else_parameter],
+                    UnwindTarget::Propagate,
+                );
+
+                builder.switch_to_block(completion);
+                let completion_value = append_number(&mut builder, 0.0);
+                builder.terminate(
+                    OperationKind::Return(ReturnOp::new()),
+                    [completion_value],
+                    UnwindTarget::Propagate,
+                );
+
+                (
+                    terminator,
+                    condition_value,
+                    then_block,
+                    else_block,
+                    then_value,
+                    else_value,
+                )
+            };
+
+            assert_eq!(fold_constant_ifs(module.function_mut(function).unwrap()), 1);
+
+            let function = module.function(function).unwrap();
+            let operation = function.operation(terminator).unwrap();
+            let selected_block = if condition { then_block } else { else_block };
+            let selected_value = if condition { then_value } else { else_value };
+            let rejected_value = if condition { else_value } else { then_value };
+
+            assert!(matches!(operation.kind(), OperationKind::Jump(_)));
+            assert_eq!(
+                successor(function, function.entry_block()),
+                (selected_block, vec![selected_value])
+            );
+            assert!(function.value(condition_value).unwrap().uses().is_empty());
+            assert!(function.value(rejected_value).unwrap().uses().is_empty());
+            assert_eq!(function.value(selected_value).unwrap().uses().len(), 1);
+        }
+    }
 
     #[test]
     fn threads_a_forwarding_block_and_composes_its_arguments() {
@@ -317,7 +436,7 @@ mod tests {
             let target_parameter =
                 builder.append_block_parameter(target, BlockParameterSource::Forwarded);
 
-            let condition = append_boolean(&mut builder, true);
+            let condition = append_unknown_condition(&mut builder);
             builder.terminate(
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
@@ -433,7 +552,7 @@ mod tests {
             let parameter =
                 builder.append_block_parameter(forwarding, BlockParameterSource::Forwarded);
 
-            let condition = append_boolean(&mut builder, true);
+            let condition = append_unknown_condition(&mut builder);
             builder.terminate(
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
@@ -487,6 +606,16 @@ mod tests {
     ) -> evrel_ir::ValueId {
         let operation = builder.append_operation(
             OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(value))),
+            [],
+            UnwindTarget::Propagate,
+        );
+
+        builder.operation_results(operation)[0]
+    }
+
+    fn append_unknown_condition(builder: &mut evrel_ir::FunctionBuilder<'_>) -> evrel_ir::ValueId {
+        let operation = builder.append_operation(
+            OperationKind::LoadThis(LoadThisOp::new()),
             [],
             UnwindTarget::Propagate,
         );

@@ -131,6 +131,37 @@ impl OperationData {
         operands
     }
 
+    pub(crate) fn replace_if_with_jump(&mut self, successor_index: usize) -> Vec<ValueId> {
+        assert!(
+            matches!(self.kind, OperationKind::If(_)),
+            "only an if terminator can be replaced through this API",
+        );
+        assert!(
+            self.results.is_empty(),
+            "an if terminator cannot produce results",
+        );
+
+        let successor = *self
+            .successors()
+            .get(successor_index)
+            .expect("if terminator has no such successor");
+
+        assert_eq!(
+            successor.produced_argument_count(),
+            0,
+            "an if edge cannot produce block arguments",
+        );
+
+        let arguments = successor.arguments(&self.operands).to_vec();
+        let previous_operands = std::mem::replace(&mut self.operands, arguments);
+
+        self.kind = OperationKind::Jump(JumpOp::new(successor.target()));
+
+        debug_assert_eq!(self.operands.len(), self.kind.operand_count());
+
+        previous_operands
+    }
+
     pub(crate) fn replace_successor(
         &mut self,
         successor_index: usize,

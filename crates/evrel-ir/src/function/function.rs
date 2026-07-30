@@ -982,6 +982,56 @@ impl FunctionIr {
         }
     }
 
+    pub(crate) fn replace_if_with_jump(&mut self, terminator: OperationId, successor_index: usize) {
+        let block = self
+            .operations
+            .get(terminator)
+            .expect("cannot replace an unknown terminator")
+            .block();
+
+        assert_eq!(
+            self.blocks
+                .get(block)
+                .expect("terminator block must remain live")
+                .terminator(),
+            Some(terminator),
+            "operation must be its block's terminator",
+        );
+
+        let previous_operands = self
+            .operations
+            .get_mut(terminator)
+            .expect("terminator was validated above")
+            .replace_if_with_jump(successor_index);
+
+        for (operand_index, operand) in previous_operands.into_iter().enumerate() {
+            self.values
+                .get_mut(operand)
+                .expect("previous operand must remain live")
+                .remove_use(ValueUse::new(
+                    terminator,
+                    u32::try_from(operand_index).expect("operand index must fit in u32"),
+                ));
+        }
+
+        let replacement_operands = self
+            .operations
+            .get(terminator)
+            .expect("replacement terminator must remain live")
+            .operands()
+            .to_vec();
+
+        for (operand_index, operand) in replacement_operands.into_iter().enumerate() {
+            self.values
+                .get_mut(operand)
+                .expect("replacement operand must remain live")
+                .add_use(ValueUse::new(
+                    terminator,
+                    u32::try_from(operand_index).expect("operand index must fit in u32"),
+                ));
+        }
+    }
+
     pub(crate) fn replace_operand(
         &mut self,
         operation: OperationId,

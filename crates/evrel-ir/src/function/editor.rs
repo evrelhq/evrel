@@ -73,6 +73,12 @@ impl<'ir> FunctionEditor<'ir> {
         self.ir.replace_operation_with_constant(operation, value);
     }
 
+    /// Replaces an `if` terminator with a jump to one of its existing
+    /// successors, preserving that edge's forwarded arguments.
+    pub fn replace_if_with_jump(&mut self, terminator: OperationId, successor_index: usize) {
+        self.ir.replace_if_with_jump(terminator, successor_index);
+    }
+
     /// Replaces one exact terminator successor and its forwarded arguments.
     pub fn replace_successor(
         &mut self,
