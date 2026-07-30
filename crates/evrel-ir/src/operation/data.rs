@@ -45,6 +45,10 @@ impl OperationData {
         self.block
     }
 
+    pub(crate) fn set_block(&mut self, block: BlockId) {
+        self.block = block;
+    }
+
     /// Returns where exceptions raised by this operation leave normal control flow.
     ///
     /// This records the operation's unwind context even when the current operation
@@ -125,6 +129,28 @@ impl OperationData {
         self.kind = OperationKind::Constant(ConstantOp::new(value));
 
         operands
+    }
+
+    pub(crate) fn replace_successor(
+        &mut self,
+        successor_index: usize,
+        target: BlockId,
+        arguments: impl IntoIterator<Item = ValueId>,
+    ) {
+        let successor = *self
+            .successors()
+            .get(successor_index)
+            .expect("operation has no such successor");
+        let arguments = arguments.into_iter().collect::<Vec<_>>();
+
+        self.operands.splice(
+            successor.argument_operand_range(),
+            arguments.iter().copied(),
+        );
+        *self.kind.successor_target_mut(successor_index) =
+            super::BlockTarget::new(target, arguments.len());
+
+        debug_assert_eq!(self.operands.len(), self.kind.operand_count());
     }
 
     pub(crate) fn append_successor_argument(

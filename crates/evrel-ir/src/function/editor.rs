@@ -73,6 +73,31 @@ impl<'ir> FunctionEditor<'ir> {
         self.ir.replace_operation_with_constant(operation, value);
     }
 
+    /// Replaces one exact terminator successor and its forwarded arguments.
+    pub fn replace_successor(
+        &mut self,
+        terminator: OperationId,
+        successor_index: usize,
+        target: BlockId,
+        arguments: impl IntoIterator<Item = ValueId>,
+    ) {
+        self.ir
+            .replace_successor(terminator, successor_index, target, arguments);
+    }
+
+    /// Removes blocks after proving that no live structural or control-flow
+    /// reference reaches them.
+    pub fn remove_blocks(&mut self, blocks: impl IntoIterator<Item = BlockId>) {
+        self.ir.remove_blocks(blocks);
+    }
+
+    /// Merges a block into its unique unconditional predecessor.
+    ///
+    /// Every parameter of `block` must have no uses before this is called.
+    pub fn merge_block_into_predecessor(&mut self, predecessor: BlockId, block: BlockId) {
+        self.ir.merge_block_into_predecessor(predecessor, block);
+    }
+
     /// Appends one forwarded parameter to every selected block and updates all
     /// incoming edges.
     ///

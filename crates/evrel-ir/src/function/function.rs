@@ -1,6 +1,6 @@
 //! Function-level IR storage.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use crate::arena::Arena;
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
     OperationEffects, OperationId, OperationKind, RegionData, RegionId, RegionOwner, UnwindTarget,
     ValueData, ValueDefinition, ValueId, ValueUse,
 };
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Owns the regions, blocks, operations, and values for one function.
 #[derive(Clone)]
@@ -500,6 +501,462 @@ impl FunctionIr {
             self.operations
                 .remove(operation)
                 .expect("validated operation must remain live");
+        }
+    }
+
+    pub(crate) fn replace_successor(
+        &mut self,
+        terminator: OperationId,
+        successor_index: usize,
+        target: BlockId,
+        arguments: impl IntoIterator<Item = ValueId>,
+    ) {
+        let operation = self
+            .operations
+            .get(terminator)
+            .expect("cannot edit an unknown terminator");
+        let successor = *operation
+            .successors()
+            .get(successor_index)
+            .expect("terminator has no such successor");
+        let arguments = arguments.into_iter().collect::<Vec<_>>();
+        let target_data = self
+            .blocks
+            .get(target)
+            .expect("successor target must belong to the function");
+        let produced_count = successor.produced_argument_count();
+
+        assert_eq!(
+            self.block_region(operation.block()),
+            self.block_region(target),
+            "ordinary control-flow edges cannot cross region boundaries",
+        );
+        assert_eq!(
+            target_data.parameters().len(),
+            produced_count + arguments.len(),
+            "successor arguments must match target block parameters",
+        );
+        assert!(
+            target_data.parameters()[..produced_count]
+                .iter()
+                .all(|parameter| parameter.source() == BlockParameterSource::Produced),
+            "successor-produced values must enter produced block parameters",
+        );
+        assert!(
+            target_data.parameters()[produced_count..]
+                .iter()
+                .all(|parameter| parameter.source() == BlockParameterSource::Forwarded),
+            "successor operands must enter forwarded block parameters",
+        );
+        assert!(
+            arguments
+                .iter()
+                .all(|argument| self.values.get(*argument).is_some()),
+            "successor arguments must belong to the function",
+        );
+
+        let previous_operands = self
+            .operations
+            .get(terminator)
+            .expect("terminator was validated above")
+            .operands()
+            .to_vec();
+
+        for (operand_index, operand) in previous_operands.iter().copied().enumerate() {
+            self.values
+                .get_mut(operand)
+                .expect("existing operand must remain live")
+                .remove_use(ValueUse::new(
+                    terminator,
+                    u32::try_from(operand_index).expect("operand index must fit in u32"),
+                ));
+        }
+
+        self.operations
+            .get_mut(terminator)
+            .expect("terminator was validated above")
+            .replace_successor(successor_index, target, arguments);
+
+        let replacement_operands = self
+            .operations
+            .get(terminator)
+            .expect("terminator must remain live")
+            .operands()
+            .to_vec();
+
+        for (operand_index, operand) in replacement_operands.into_iter().enumerate() {
+            self.values
+                .get_mut(operand)
+                .expect("replacement operand must remain live")
+                .add_use(ValueUse::new(
+                    terminator,
+                    u32::try_from(operand_index).expect("operand index must fit in u32"),
+                ));
+        }
+    }
+
+    pub(crate) fn remove_blocks(&mut self, blocks: impl IntoIterator<Item = BlockId>) {
+        self.remove_block_entities(blocks);
+    }
+
+    pub(crate) fn merge_block_into_predecessor(&mut self, predecessor: BlockId, block: BlockId) {
+        assert_ne!(predecessor, block, "cannot merge a block into itself");
+
+        let jump = self
+            .blocks
+            .get(predecessor)
+            .expect("predecessor block must belong to the function")
+            .terminator()
+            .expect("predecessor block must have a terminator");
+        let jump_data = self
+            .operations
+            .get(jump)
+            .expect("predecessor terminator must remain live")
+            .clone();
+        let OperationKind::Jump(jump_kind) = jump_data.kind() else {
+            panic!("linear block merging requires an unconditional predecessor");
+        };
+
+        assert_eq!(
+            jump_kind.target().block(),
+            block,
+            "predecessor must jump to the merged block",
+        );
+        assert!(
+            jump_data.regions().is_empty() && jump_data.results().is_empty(),
+            "removed jump cannot own regions or produce values",
+        );
+        assert_eq!(
+            self.block_region(predecessor),
+            self.block_region(block),
+            "merged blocks must belong to the same region",
+        );
+        assert!(
+            self.blocks
+                .get(block)
+                .expect("merged block must belong to the function")
+                .parameters()
+                .iter()
+                .all(|parameter| {
+                    self.values
+                        .get(parameter.value())
+                        .expect("block parameter must remain live")
+                        .uses()
+                        .is_empty()
+                }),
+            "merged block parameters must be substituted first",
+        );
+
+        let removed_jump = self
+            .blocks
+            .get_mut(predecessor)
+            .expect("predecessor was validated above")
+            .take_terminator();
+        assert_eq!(removed_jump, Some(jump));
+
+        for (operand_index, operand) in jump_data.operands().iter().copied().enumerate() {
+            self.values
+                .get_mut(operand)
+                .expect("jump operand must remain live")
+                .remove_use(ValueUse::new(
+                    jump,
+                    u32::try_from(operand_index).expect("operand index must fit in u32"),
+                ));
+        }
+        self.operations
+            .remove(jump)
+            .expect("predecessor jump must remain live until removal");
+
+        let (operations, terminator) = {
+            let block_data = self
+                .blocks
+                .get_mut(block)
+                .expect("merged block was validated above");
+
+            (block_data.take_operations(), block_data.take_terminator())
+        };
+
+        for operation in operations.iter().copied().chain(terminator) {
+            self.operations
+                .get_mut(operation)
+                .expect("moved operation must remain live")
+                .set_block(predecessor);
+        }
+
+        let predecessor_data = self
+            .blocks
+            .get_mut(predecessor)
+            .expect("predecessor was validated above");
+        predecessor_data.extend_operations(operations);
+        if let Some(terminator) = terminator {
+            predecessor_data.set_terminator(terminator);
+        }
+
+        self.remove_block_entities([block]);
+    }
+
+    fn remove_block_entities(&mut self, blocks: impl IntoIterator<Item = BlockId>) {
+        let mut removed_blocks = blocks.into_iter().collect::<BTreeSet<_>>();
+        let mut removed_operations = BTreeSet::new();
+        let mut removed_regions = BTreeSet::new();
+
+        for block in &removed_blocks {
+            assert!(
+                self.blocks.get(*block).is_some(),
+                "cannot remove an unknown block",
+            );
+        }
+        loop {
+            let previous_counts = (
+                removed_blocks.len(),
+                removed_operations.len(),
+                removed_regions.len(),
+            );
+
+            for region in &removed_regions {
+                removed_blocks.extend(
+                    self.regions
+                        .get(*region)
+                        .expect("removed region must remain live until deletion")
+                        .blocks()
+                        .iter()
+                        .copied(),
+                );
+            }
+
+            for block in &removed_blocks {
+                let data = self
+                    .blocks
+                    .get(*block)
+                    .expect("removed block must remain live until deletion");
+
+                removed_operations.extend(data.operations().iter().copied());
+                removed_operations.extend(data.terminator());
+            }
+
+            for operation in &removed_operations {
+                let data = self
+                    .operations
+                    .get(*operation)
+                    .expect("removed block must reference live operations");
+
+                for region in data.regions() {
+                    removed_regions.insert(region);
+                }
+            }
+
+            if (
+                removed_blocks.len(),
+                removed_operations.len(),
+                removed_regions.len(),
+            ) == previous_counts
+            {
+                break;
+            }
+        }
+
+        for (region, data) in self.regions.iter() {
+            if removed_blocks.contains(&data.entry_block()) {
+                assert!(
+                    removed_regions.contains(&region),
+                    "cannot remove the entry block of a live region",
+                );
+            }
+        }
+
+        assert!(
+            !removed_regions.contains(&self.body),
+            "cannot remove the function body region",
+        );
+
+        for parameter in &self.parameters {
+            assert!(
+                parameter
+                    .target()
+                    .regions()
+                    .iter()
+                    .all(|region| !removed_regions.contains(region)),
+                "cannot remove a region owned by a live function parameter",
+            );
+        }
+
+        for (operation, data) in self.operations.iter() {
+            if removed_operations.contains(&operation) {
+                continue;
+            }
+
+            assert!(
+                data.successors()
+                    .iter()
+                    .all(|successor| !removed_blocks.contains(&successor.target().block())),
+                "a live operation cannot target a removed block",
+            );
+            assert!(
+                data.structural_blocks()
+                    .iter()
+                    .all(|block| !removed_blocks.contains(block)),
+                "a live operation cannot structurally reference a removed block",
+            );
+            assert!(
+                data.regions()
+                    .iter()
+                    .all(|region| !removed_regions.contains(region)),
+                "a live operation cannot own a removed region",
+            );
+        }
+
+        for (_, handler) in self.exception_handlers.iter() {
+            assert!(
+                !removed_blocks.contains(&handler.entry_block()),
+                "a live exception handler cannot reference a removed block",
+            );
+        }
+        for (_, statement) in self.labeled_statements.iter() {
+            assert!(
+                statement
+                    .referenced_blocks()
+                    .iter()
+                    .all(|block| !removed_blocks.contains(block)),
+                "live labeled-statement metadata cannot reference a removed block",
+            );
+        }
+
+        let mut removed_values = BTreeSet::new();
+
+        for block in &removed_blocks {
+            let data = self
+                .blocks
+                .get(*block)
+                .expect("removed block must remain live until deletion");
+
+            removed_values.extend(data.parameters().iter().map(|parameter| parameter.value()));
+        }
+        for operation in &removed_operations {
+            let data = self
+                .operations
+                .get(*operation)
+                .expect("removed operation must remain live until deletion");
+
+            removed_values.extend(data.results().iter().copied());
+        }
+
+        for value in &removed_values {
+            assert!(
+                self.values
+                    .get(*value)
+                    .expect("removed value must remain live until deletion")
+                    .uses()
+                    .iter()
+                    .all(|use_site| removed_operations.contains(&use_site.operation())),
+                "a live operation cannot use a value defined in a removed block",
+            );
+        }
+
+        let removals = removed_operations.iter().copied().collect::<FxHashSet<_>>();
+        let mut removals_by_block = FxHashMap::<BlockId, usize>::default();
+
+        for operation in &removed_operations {
+            let data = self
+                .operations
+                .get(*operation)
+                .expect("removed operation must remain live until deletion");
+            let block = self
+                .blocks
+                .get(data.block())
+                .expect("removed operation block must remain live until deletion");
+
+            if data.kind().is_terminator() {
+                assert_eq!(
+                    block.terminator(),
+                    Some(*operation),
+                    "terminator must belong to its recorded block",
+                );
+            } else {
+                *removals_by_block.entry(data.block()).or_default() += 1;
+            }
+        }
+
+        for (block, expected_removals) in removals_by_block {
+            let block_data = self
+                .blocks
+                .get_mut(block)
+                .expect("removed operation block was validated above");
+            let actual_removals = if removed_blocks.contains(&block) {
+                block_data
+                    .operations()
+                    .iter()
+                    .filter(|operation| removals.contains(operation))
+                    .count()
+            } else {
+                block_data.retain_operations(|operation| !removals.contains(&operation))
+            };
+
+            assert_eq!(
+                actual_removals, expected_removals,
+                "operations must belong to their recorded blocks",
+            );
+        }
+
+        for operation in &removed_operations {
+            let data = self
+                .operations
+                .get(*operation)
+                .expect("removed operation must remain live until deletion");
+
+            for (operand_index, operand) in data.operands().iter().copied().enumerate() {
+                self.values
+                    .get_mut(operand)
+                    .expect("removed operation operand must remain live")
+                    .remove_use(ValueUse::new(
+                        *operation,
+                        u32::try_from(operand_index).expect("operand index must fit in u32"),
+                    ));
+            }
+        }
+
+        for value in &removed_values {
+            debug_assert!(
+                self.values
+                    .get(*value)
+                    .expect("removed value must remain live until deletion")
+                    .uses()
+                    .is_empty(),
+            );
+        }
+
+        let retained_regions = self
+            .regions
+            .iter()
+            .map(|(region, _)| region)
+            .filter(|region| !removed_regions.contains(region))
+            .collect::<Vec<_>>();
+
+        for region in retained_regions {
+            self.regions
+                .get_mut(region)
+                .expect("live region must remain present")
+                .retain_blocks(|block| !removed_blocks.contains(&block));
+        }
+
+        for value in removed_values {
+            self.values
+                .remove(value)
+                .expect("removed value was validated above");
+        }
+        for operation in removed_operations {
+            self.operations
+                .remove(operation)
+                .expect("removed operation was validated above");
+        }
+        for block in removed_blocks {
+            self.blocks
+                .remove(block)
+                .expect("removed block was validated above");
+        }
+        for region in removed_regions {
+            self.regions
+                .remove(region)
+                .expect("removed region was validated above");
         }
     }
 

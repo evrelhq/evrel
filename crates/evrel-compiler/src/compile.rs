@@ -5,6 +5,7 @@ use evrel_frontend::lower_source_file;
 use evrel_ir::ModuleIr;
 use evrel_middle::transform::{
     eliminate_dead_code, promote_bindings_to_ssa, propagate_constants, simplify_block_parameters,
+    simplify_control_flow,
 };
 
 use crate::{
@@ -50,6 +51,7 @@ fn compile_module(module: &mut ModuleIr) -> Result<CompileOutput, CompilerError>
     promote_bindings_to_ssa(module);
     propagate_constants(module);
     simplify_block_parameters(module);
+    simplify_control_flow(module);
     eliminate_dead_code(module);
 
     let code = generate(module)?;

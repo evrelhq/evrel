@@ -79,6 +79,15 @@ impl RegionData {
         self.block_order.push(block);
     }
 
+    pub(crate) fn retain_blocks(&mut self, mut keep: impl FnMut(BlockId) -> bool) {
+        assert!(
+            keep(self.entry_block),
+            "cannot remove the entry block of a live region",
+        );
+
+        self.block_order.retain(|block| keep(*block));
+    }
+
     pub(crate) fn attach(&mut self, owner: RegionOwner) {
         assert!(
             self.owner.replace(owner).is_none(),

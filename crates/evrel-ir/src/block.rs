@@ -104,10 +104,34 @@ impl BasicBlockData {
         self.operations.remove(index);
     }
 
+    pub(crate) fn retain_operations(&mut self, mut keep: impl FnMut(OperationId) -> bool) -> usize {
+        let previous_len = self.operations.len();
+        self.operations.retain(|operation| keep(*operation));
+
+        previous_len - self.operations.len()
+    }
+
+    pub(crate) fn take_operations(&mut self) -> Vec<OperationId> {
+        std::mem::take(&mut self.operations)
+    }
+
+    pub(crate) fn extend_operations(&mut self, operations: impl IntoIterator<Item = OperationId>) {
+        assert!(
+            self.terminator.is_none(),
+            "cannot append operations after a block terminator",
+        );
+
+        self.operations.extend(operations);
+    }
+
     pub(crate) fn set_terminator(&mut self, operation: OperationId) {
         assert!(
             self.terminator.replace(operation).is_none(),
             "a block cannot have more than one terminator"
         );
+    }
+
+    pub(crate) fn take_terminator(&mut self) -> Option<OperationId> {
+        self.terminator.take()
     }
 }
