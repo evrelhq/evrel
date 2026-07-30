@@ -1,6 +1,6 @@
 //! Removal of blocks that cannot execute.
 
-use evrel_ir::{BlockId, FunctionEditor, FunctionIr, ModuleIr};
+use evrel_ir::{BlockId, FunctionEditor, FunctionIr};
 use rustc_hash::FxHashSet;
 
 use crate::work_queue::WorkQueue;
@@ -8,17 +8,12 @@ use crate::work_queue::WorkQueue;
 /// Removes blocks unreachable from executable or structurally live roots.
 ///
 /// Returns the number of removed blocks.
-pub fn prune_unreachable_blocks(module: &mut ModuleIr) -> usize {
-    let mut removed = 0;
+pub fn prune_unreachable_blocks(function: &mut FunctionIr) -> usize {
+    let blocks = plan_unreachable_blocks(function);
+    let removed = blocks.len();
 
-    for (_, function) in module.functions_mut() {
-        let blocks = plan_unreachable_blocks(function);
-
-        removed += blocks.len();
-
-        if !blocks.is_empty() {
-            FunctionEditor::new(function).remove_blocks(blocks);
-        }
+    if !blocks.is_empty() {
+        FunctionEditor::new(function).remove_blocks(blocks);
     }
 
     removed
@@ -132,9 +127,15 @@ mod tests {
             detached
         };
 
-        assert_eq!(prune_unreachable_blocks(&mut module), 1);
+        assert_eq!(
+            prune_unreachable_blocks(module.function_mut(function).unwrap()),
+            1
+        );
         assert!(module.function(function).unwrap().block(detached).is_none());
-        assert_eq!(prune_unreachable_blocks(&mut module), 0);
+        assert_eq!(
+            prune_unreachable_blocks(module.function_mut(function).unwrap()),
+            0
+        );
     }
 
     #[test]
@@ -186,7 +187,10 @@ mod tests {
             completion
         };
 
-        assert_eq!(prune_unreachable_blocks(&mut module), 0);
+        assert_eq!(
+            prune_unreachable_blocks(module.function_mut(function).unwrap()),
+            0
+        );
         assert!(
             module
                 .function(function)

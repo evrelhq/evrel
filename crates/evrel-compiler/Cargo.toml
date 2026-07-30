@@ -8,6 +8,7 @@ evrel-codegen-js = { path = "../evrel-codegen-js" }
 evrel-frontend = { path = "../evrel-frontend" }
 evrel-ir = { path = "../evrel-ir" }
 evrel-middle = { path = "../evrel-middle" }
+rayon.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

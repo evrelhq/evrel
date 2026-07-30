@@ -2,6 +2,7 @@ use evrel_compiler::{
     CompileInput, ModuleKey, ModuleRequest, ModuleRequestKind, ProgramInput, ProgramModuleInput,
     ResolvedModuleRequest, ResolvedModuleTarget, compile, compile_program,
 };
+use rayon::ThreadPoolBuilder;
 
 #[test]
 fn compiles_javascript() {
@@ -59,4 +60,33 @@ fn compiles_a_host_resolved_program() {
 
     assert!(output.module(&dependency).is_some());
     assert!(output.module(&entry).is_some());
+}
+
+#[test]
+fn parallel_function_optimization_is_deterministic() {
+    let mut source = String::new();
+
+    for function in 0..24 {
+        source.push_str(&format!("export function f{function}(value) {{"));
+
+        for _ in 0..128 {
+            source.push_str("value = value + 1;");
+        }
+
+        source.push_str("return value;}");
+    }
+
+    let compile_with_workers = |workers| {
+        ThreadPoolBuilder::new()
+            .num_threads(workers)
+            .build()
+            .unwrap()
+            .install(|| {
+                compile(CompileInput::new("input.js", &source))
+                    .unwrap()
+                    .into_code()
+            })
+    };
+
+    assert_eq!(compile_with_workers(1), compile_with_workers(4));
 }

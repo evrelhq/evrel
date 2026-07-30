@@ -1,8 +1,7 @@
 //! Canonical simplification of ordinary regional control flow.
 
 use evrel_ir::{
-    BlockId, BlockParameterSource, FunctionEditor, FunctionIr, ModuleIr, OperationId,
-    OperationKind, ValueId,
+    BlockId, BlockParameterSource, FunctionEditor, FunctionIr, OperationId, OperationKind, ValueId,
 };
 use rustc_hash::FxHashMap;
 
@@ -16,14 +15,7 @@ use crate::analysis::{FunctionValueAnalysis, RegionControlFlowGraph};
 /// mutation.
 ///
 /// Returns the number of applied control-flow rewrites.
-pub fn simplify_control_flow(module: &mut ModuleIr) -> usize {
-    module
-        .functions_mut()
-        .map(|(_, function)| simplify_function(function))
-        .sum()
-}
-
-fn simplify_function(function: &mut FunctionIr) -> usize {
+pub fn simplify_control_flow(function: &mut FunctionIr) -> usize {
     let mut rewritten = fold_constant_ifs(function);
 
     while let Some(rewrite) = find_rewrite(function) {
@@ -488,8 +480,14 @@ mod tests {
             )
         };
 
-        assert_eq!(simplify_control_flow(&mut module), 1);
-        assert_eq!(simplify_control_flow(&mut module), 0);
+        assert_eq!(
+            simplify_control_flow(module.function_mut(function).unwrap()),
+            1
+        );
+        assert_eq!(
+            simplify_control_flow(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
         assert!(function.block(forwarding).is_none());
@@ -526,7 +524,10 @@ mod tests {
             (middle, argument, returned)
         };
 
-        assert_eq!(simplify_control_flow(&mut module), 1);
+        assert_eq!(
+            simplify_control_flow(module.function_mut(function).unwrap()),
+            1
+        );
 
         let function = module.function(function).unwrap();
         assert!(function.block(middle).is_none());
@@ -590,7 +591,10 @@ mod tests {
             forwarding
         };
 
-        assert_eq!(simplify_control_flow(&mut module), 0);
+        assert_eq!(
+            simplify_control_flow(module.function_mut(function).unwrap()),
+            0
+        );
         assert!(
             module
                 .function(function)

@@ -1,7 +1,7 @@
 //! Elimination of trivial forwarded SSA block parameters.
 
 use evrel_ir::{
-    BlockId, BlockParameterSource, FunctionEditor, FunctionIr, ModuleIr, ValueDefinition, ValueId,
+    BlockId, BlockParameterSource, FunctionEditor, FunctionIr, ValueDefinition, ValueId,
 };
 
 use crate::analysis::{RegionControlFlowError, RegionControlFlowGraph};
@@ -18,19 +18,9 @@ struct Simplification {
 /// Removes unused forwarded block parameters and parameters whose effective
 /// incoming values all agree.
 ///
-/// Returns the number of removed parameters. Functions whose ordinary regional
-/// control flow cannot be modeled soundly are left unchanged.
-pub fn simplify_block_parameters(module: &mut ModuleIr) -> usize {
-    let mut removed = 0;
-
-    for (_, function) in module.functions_mut() {
-        removed += simplify_function(function);
-    }
-
-    removed
-}
-
-fn simplify_function(function: &mut FunctionIr) -> usize {
+/// Returns zero when the function's ordinary regional control flow cannot be
+/// modeled soundly.
+pub fn simplify_block_parameters(function: &mut FunctionIr) -> usize {
     let graphs = function
         .regions()
         .map(|(region, _)| RegionControlFlowGraph::compute(function, region))
@@ -275,8 +265,14 @@ mod tests {
             (join, parameter, condition, value, branch, returned)
         };
 
-        assert_eq!(simplify_block_parameters(&mut module), 1);
-        assert_eq!(simplify_block_parameters(&mut module), 0);
+        assert_eq!(
+            simplify_block_parameters(module.function_mut(function).unwrap()),
+            1
+        );
+        assert_eq!(
+            simplify_block_parameters(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
         let branch = function.operation(branch).unwrap();
@@ -343,7 +339,10 @@ mod tests {
             )
         };
 
-        assert_eq!(simplify_block_parameters(&mut module), 1);
+        assert_eq!(
+            simplify_block_parameters(module.function_mut(function).unwrap()),
+            1
+        );
 
         let function = module.function(function).unwrap();
         let block = function.block(join).unwrap();
@@ -402,7 +401,10 @@ mod tests {
             (join, parameter, branch)
         };
 
-        assert_eq!(simplify_block_parameters(&mut module), 1);
+        assert_eq!(
+            simplify_block_parameters(module.function_mut(function).unwrap()),
+            1
+        );
 
         let function = module.function(function).unwrap();
         let branch = function.operation(branch).unwrap();
@@ -460,7 +462,10 @@ mod tests {
             (header, parameter, initial, entry_jump, backedge, returned)
         };
 
-        assert_eq!(simplify_block_parameters(&mut module), 1);
+        assert_eq!(
+            simplify_block_parameters(module.function_mut(function).unwrap()),
+            1
+        );
 
         let function = module.function(function).unwrap();
 
@@ -523,8 +528,14 @@ mod tests {
             )
         };
 
-        assert_eq!(simplify_block_parameters(&mut module), 2);
-        assert_eq!(simplify_block_parameters(&mut module), 0);
+        assert_eq!(
+            simplify_block_parameters(module.function_mut(function).unwrap()),
+            2
+        );
+        assert_eq!(
+            simplify_block_parameters(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
 

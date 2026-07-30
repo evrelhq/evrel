@@ -1,8 +1,8 @@
 //! Elimination of repeated deterministic SSA expressions.
 
 use evrel_ir::{
-    BinaryOperator, BlockId, FunctionEditor, FunctionIr, ModuleIr, OperationData, OperationId,
-    OperationKind, TypeofTarget, UnaryOperator, ValueId,
+    BinaryOperator, BlockId, FunctionEditor, FunctionIr, OperationData, OperationId, OperationKind,
+    TypeofTarget, UnaryOperator, ValueId,
 };
 use rustc_hash::FxHashMap;
 
@@ -13,28 +13,22 @@ use crate::analysis::{
 /// Removes repeated deterministic expressions whose earlier result dominates
 /// the repeated evaluation.
 ///
-/// Functions whose value flow or control flow cannot be modeled soundly are
-/// left unchanged. Returns the number of removed operations.
-pub fn eliminate_common_subexpressions(module: &mut ModuleIr) -> usize {
-    let mut removed = 0;
-
-    for (_, function) in module.functions_mut() {
-        let replacements = {
-            let Ok(values) = FunctionValueAnalysis::compute(function) else {
-                continue;
-            };
-
-            let Some(replacements) = plan_replacements(function, &values) else {
-                continue;
-            };
-
-            replacements
+/// Returns zero when the function's value flow or control flow cannot be
+/// modeled soundly.
+pub fn eliminate_common_subexpressions(function: &mut FunctionIr) -> usize {
+    let replacements = {
+        let Ok(values) = FunctionValueAnalysis::compute(function) else {
+            return 0;
         };
 
-        removed += apply_replacements(function, replacements);
-    }
+        let Some(replacements) = plan_replacements(function, &values) else {
+            return 0;
+        };
 
-    removed
+        replacements
+    };
+
+    apply_replacements(function, replacements)
 }
 
 /// The operation-specific part of an expression's identity.
@@ -229,8 +223,14 @@ mod tests {
             (first, first_result, repeated, returned)
         };
 
-        assert_eq!(eliminate_common_subexpressions(&mut module), 1);
-        assert_eq!(eliminate_common_subexpressions(&mut module), 0);
+        assert_eq!(
+            eliminate_common_subexpressions(module.function_mut(function).unwrap()),
+            1
+        );
+        assert_eq!(
+            eliminate_common_subexpressions(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
 
@@ -273,8 +273,14 @@ mod tests {
             (first, first_result, repeated, returned)
         };
 
-        assert_eq!(eliminate_common_subexpressions(&mut module), 1);
-        assert_eq!(eliminate_common_subexpressions(&mut module), 0);
+        assert_eq!(
+            eliminate_common_subexpressions(module.function_mut(function).unwrap()),
+            1
+        );
+        assert_eq!(
+            eliminate_common_subexpressions(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
 
@@ -347,7 +353,10 @@ mod tests {
             (left_addition, right_addition)
         };
 
-        assert_eq!(eliminate_common_subexpressions(&mut module), 0);
+        assert_eq!(
+            eliminate_common_subexpressions(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
 
@@ -384,7 +393,10 @@ mod tests {
             (first, repeated)
         };
 
-        assert_eq!(eliminate_common_subexpressions(&mut module), 0);
+        assert_eq!(
+            eliminate_common_subexpressions(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
 

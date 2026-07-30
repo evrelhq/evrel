@@ -31,7 +31,10 @@ fn replaces_a_proven_effect_free_result_with_a_constant() {
         operation
     };
 
-    assert_eq!(propagate_constants(&mut module), 1);
+    assert_eq!(
+        propagate_constants(module.function_mut(function).unwrap()),
+        1
+    );
 
     let function = module.function(function).unwrap();
     let OperationKind::Constant(constant) = function.operation(operation).unwrap().kind() else {
@@ -102,7 +105,10 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
         operation
     };
 
-    assert_eq!(propagate_constants(&mut module), 1);
+    assert_eq!(
+        propagate_constants(module.function_mut(function).unwrap()),
+        1
+    );
 
     let function = module.function(function).unwrap();
     let OperationKind::Constant(constant) = function.operation(operation).unwrap().kind() else {
@@ -138,7 +144,10 @@ fn replaces_proven_non_throwing_numeric_addition() {
         addition
     };
 
-    assert_eq!(propagate_constants(&mut module), 1);
+    assert_eq!(
+        propagate_constants(module.function_mut(function).unwrap()),
+        1
+    );
 
     let function = module.function(function).unwrap();
     let OperationKind::Constant(constant) = function.operation(addition).unwrap().kind() else {
@@ -171,8 +180,14 @@ fn ignores_existing_constants_and_reaches_a_fixed_point() {
         );
     }
 
-    assert_eq!(propagate_constants(&mut module), 1);
-    assert_eq!(propagate_constants(&mut module), 0);
+    assert_eq!(
+        propagate_constants(module.function_mut(function).unwrap()),
+        1
+    );
+    assert_eq!(
+        propagate_constants(module.function_mut(function).unwrap()),
+        0
+    );
 }
 
 #[test]
@@ -208,7 +223,10 @@ fn skips_a_function_with_implicit_local_exception_flow() {
         candidate
     };
 
-    assert_eq!(propagate_constants(&mut module), 0);
+    assert_eq!(
+        propagate_constants(module.function_mut(function).unwrap()),
+        0
+    );
     assert!(matches!(
         module
             .function(function)

@@ -1,6 +1,6 @@
 //! Worklist elimination of unused, unobservable operations.
 
-use evrel_ir::{FunctionEditor, FunctionIr, ModuleIr, OperationId, ValueDefinition};
+use evrel_ir::{FunctionEditor, FunctionIr, OperationId, ValueDefinition};
 use rustc_hash::FxHashSet;
 
 use crate::analysis::{FunctionValueAnalysis, is_safe_to_remove};
@@ -8,24 +8,18 @@ use crate::work_queue::WorkQueue;
 
 /// Removes unused operations whose evaluation is proven unobservable.
 ///
-/// Functions whose value flow cannot yet be modeled soundly are left
-/// unchanged. Returns the number of removed operations.
-pub fn eliminate_dead_code(module: &mut ModuleIr) -> usize {
-    let mut removed = 0;
-
-    for (_, function) in module.functions_mut() {
-        let removals = {
-            let Ok(values) = FunctionValueAnalysis::compute(function) else {
-                continue;
-            };
-
-            plan_dead_operations(function, &values)
+/// Returns zero when the function's value flow cannot be modeled soundly.
+pub fn eliminate_dead_code(function: &mut FunctionIr) -> usize {
+    let removals = {
+        let Ok(values) = FunctionValueAnalysis::compute(function) else {
+            return 0;
         };
 
-        removed += removals.len();
-        FunctionEditor::new(function).remove_operations(removals);
-    }
+        plan_dead_operations(function, &values)
+    };
 
+    let removed = removals.len();
+    FunctionEditor::new(function).remove_operations(removals);
     removed
 }
 
@@ -137,8 +131,14 @@ mod tests {
             (left, right, addition)
         };
 
-        assert_eq!(eliminate_dead_code(&mut module), 3);
-        assert_eq!(eliminate_dead_code(&mut module), 0);
+        assert_eq!(
+            eliminate_dead_code(module.function_mut(function).unwrap()),
+            3
+        );
+        assert_eq!(
+            eliminate_dead_code(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
 
@@ -172,7 +172,10 @@ mod tests {
             debugger
         };
 
-        assert_eq!(eliminate_dead_code(&mut module), 0);
+        assert_eq!(
+            eliminate_dead_code(module.function_mut(function).unwrap()),
+            0
+        );
         assert!(
             module
                 .function(function)
@@ -215,7 +218,10 @@ mod tests {
             addition
         };
 
-        assert_eq!(eliminate_dead_code(&mut module), 0);
+        assert_eq!(
+            eliminate_dead_code(module.function_mut(function).unwrap()),
+            0
+        );
         assert!(
             module
                 .function(function)

@@ -1,8 +1,8 @@
 //! Worklist-driven simplification of local JavaScript operations.
 
 use evrel_ir::{
-    BinaryOperator, ConstantValue, FunctionEditor, FunctionIr, ModuleIr, OperationId,
-    OperationKind, UnaryOperator, ValueDefinition, ValueId,
+    BinaryOperator, ConstantValue, FunctionEditor, FunctionIr, OperationId, OperationKind,
+    UnaryOperator, ValueDefinition, ValueId,
 };
 
 use crate::analysis::{AbstractValue, FunctionValueAnalysis, ValueTypeSet, is_safe_to_remove};
@@ -14,23 +14,12 @@ use crate::work_queue::WorkQueue;
 /// regrouping belongs to reassociation. This pass only applies bounded local
 /// rewrites and immediately revisits affected users.
 ///
-/// Functions whose value flow cannot be modeled soundly are left unchanged.
-/// Returns the number of simplified operations.
-pub fn simplify_operations(module: &mut ModuleIr) -> usize {
-    let mut simplified = 0;
+/// Returns zero when the function's value flow cannot be modeled soundly.
+pub fn simplify_operations(function: &mut FunctionIr) -> usize {
+    let Ok(values) = FunctionValueAnalysis::compute(function) else {
+        return 0;
+    };
 
-    for (_, function) in module.functions_mut() {
-        let Ok(values) = FunctionValueAnalysis::compute(function) else {
-            continue;
-        };
-
-        simplified += simplify_function(function, &values);
-    }
-
-    simplified
-}
-
-fn simplify_function(function: &mut FunctionIr, values: &FunctionValueAnalysis) -> usize {
     let mut work = WorkQueue::new();
 
     for (operation, _) in function.operations() {
@@ -41,7 +30,7 @@ fn simplify_function(function: &mut FunctionIr, values: &FunctionValueAnalysis) 
     let mut editor = FunctionEditor::new(function);
 
     while let Some(operation) = work.pop() {
-        let Some(rewrite) = plan_rewrite(editor.ir(), values, operation) else {
+        let Some(rewrite) = plan_rewrite(editor.ir(), &values, operation) else {
             continue;
         };
 
@@ -314,8 +303,14 @@ mod tests {
             (first, second, returned, number)
         };
 
-        assert_eq!(simplify_operations(&mut module), 2);
-        assert_eq!(simplify_operations(&mut module), 0);
+        assert_eq!(
+            simplify_operations(module.function_mut(function).unwrap()),
+            2
+        );
+        assert_eq!(
+            simplify_operations(module.function_mut(function).unwrap()),
+            0
+        );
 
         let function = module.function(function).unwrap();
 
@@ -357,7 +352,10 @@ mod tests {
             (inner, outer, returned, boolean)
         };
 
-        assert_eq!(simplify_operations(&mut module), 1);
+        assert_eq!(
+            simplify_operations(module.function_mut(function).unwrap()),
+            1
+        );
 
         let function = module.function(function).unwrap();
 
@@ -388,7 +386,10 @@ mod tests {
             addition
         };
 
-        assert_eq!(simplify_operations(&mut module), 0);
+        assert_eq!(
+            simplify_operations(module.function_mut(function).unwrap()),
+            0
+        );
         assert!(
             module
                 .function(function)
@@ -427,7 +428,10 @@ mod tests {
             (boolean_equality, number_equality)
         };
 
-        assert_eq!(simplify_operations(&mut module), 1);
+        assert_eq!(
+            simplify_operations(module.function_mut(function).unwrap()),
+            1
+        );
 
         let function = module.function(function).unwrap();
 
