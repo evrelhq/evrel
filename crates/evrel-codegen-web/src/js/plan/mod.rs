@@ -29,7 +29,7 @@ pub(crate) use value::JsValueRepresentation;
 
 /// Complete JavaScript emission plan for a module.
 #[derive(Debug)]
-pub(crate) struct JsModulePlan {
+pub struct JsModulePlan {
     functions: DenseMap<FunctionId, JsFunctionPlan>,
 }
 

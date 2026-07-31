@@ -10,19 +10,27 @@ use oxc_codegen::Codegen;
 use oxc_span::SPAN;
 
 use crate::{
-    JsCodegenError,
+    JsCodegenError, JsModulePlan,
     js::emit::{
         attach_local_export_declarations, emit_function_body, emit_function_directives,
         emit_module_exports, emit_module_imports,
     },
-    js::plan::JsModulePlan,
 };
 
 /// Generates JavaScript from verified Evrel IR.
 pub fn generate(module: &JsModuleIr) -> Result<String, JsCodegenError> {
-    let function_id = module.entry_function();
-    let module_plan = JsModulePlan::build(module)?;
+    let plan = plan(module)?;
+    emit(module, &plan)
+}
 
+/// Constructs a complete JavaScript output plan.
+pub fn plan(module: &JsModuleIr) -> Result<JsModulePlan, JsCodegenError> {
+    JsModulePlan::build(module)
+}
+
+/// Emits JavaScript by mapping a finalized module plan to syntax.
+pub fn emit(module: &JsModuleIr, module_plan: &JsModulePlan) -> Result<String, JsCodegenError> {
+    let function_id = module.entry_function();
     let allocator = Allocator::default();
     let builder = AstBuilder::new(&allocator);
 

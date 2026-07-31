@@ -7,4 +7,5 @@ mod name;
 mod plan;
 
 pub use error::JsCodegenError;
-pub use generate::generate;
+pub use generate::{emit, generate, plan};
+pub use plan::JsModulePlan;
