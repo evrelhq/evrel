@@ -10,6 +10,7 @@ use oxc_ast::ast::{
     JSXAttribute, JSXAttributeItem, JSXAttributeName, JSXAttributeValue, JSXChild, JSXElement,
     JSXElementName, JSXFragment, JSXMemberExpression, JSXMemberExpressionObject,
 };
+use oxc_span::GetSpan;
 
 use crate::{FrontendError, lower::FunctionLowerer};
 
@@ -177,15 +178,21 @@ fn lower_attribute_value(
         }
 
         JSXAttributeValue::Element(element) => {
-            let expression =
-                lowerer.build_expression_region(|lowerer| lower_jsx_element(lowerer, element))?;
+            let expression = lowerer.build_expression_region(|lowerer| {
+                lowerer.with_span(element.span(), |lowerer| {
+                    lower_jsx_element(lowerer, element)
+                })
+            })?;
 
             Ok(IrJsxAttributeValue::Element { expression })
         }
 
         JSXAttributeValue::Fragment(fragment) => {
-            let expression =
-                lowerer.build_expression_region(|lowerer| lower_jsx_fragment(lowerer, fragment))?;
+            let expression = lowerer.build_expression_region(|lowerer| {
+                lowerer.with_span(fragment.span(), |lowerer| {
+                    lower_jsx_fragment(lowerer, fragment)
+                })
+            })?;
 
             Ok(IrJsxAttributeValue::Fragment { expression })
         }
@@ -205,15 +212,21 @@ fn lower_children(
             }
 
             JSXChild::Element(element) => {
-                let expression = lowerer
-                    .build_expression_region(|lowerer| lower_jsx_element(lowerer, element))?;
+                let expression = lowerer.build_expression_region(|lowerer| {
+                    lowerer.with_span(element.span(), |lowerer| {
+                        lower_jsx_element(lowerer, element)
+                    })
+                })?;
 
                 lowered.push(IrJsxChild::Element { expression });
             }
 
             JSXChild::Fragment(fragment) => {
-                let expression = lowerer
-                    .build_expression_region(|lowerer| lower_jsx_fragment(lowerer, fragment))?;
+                let expression = lowerer.build_expression_region(|lowerer| {
+                    lowerer.with_span(fragment.span(), |lowerer| {
+                        lower_jsx_fragment(lowerer, fragment)
+                    })
+                })?;
 
                 lowered.push(IrJsxChild::Fragment { expression });
             }

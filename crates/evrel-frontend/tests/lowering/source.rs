@@ -43,6 +43,38 @@ fn records_exact_source_ranges_for_lowered_operations() {
 }
 
 #[test]
+fn records_each_nested_jsx_elements_own_source_range() {
+    let source = "const view = <Page.Footer><div>One</div><div><sup>Two</sup></div></Page.Footer>;";
+    let module = lower_source_file("input.tsx", source).unwrap();
+    let function = module.function(module.entry_function()).unwrap();
+
+    let elements = function
+        .operations()
+        .filter_map(|(_, operation)| {
+            matches!(operation.kind(), OperationKind::JsxElement(_)).then(|| {
+                let CompilerLocation::Source { range, .. } =
+                    module.location(operation.location()).unwrap()
+                else {
+                    panic!("JSX operations must have concrete source locations");
+                };
+
+                &source[range.start() as usize..range.end() as usize]
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        elements,
+        [
+            "<div>One</div>",
+            "<sup>Two</sup>",
+            "<div><sup>Two</sup></div>",
+            "<Page.Footer><div>One</div><div><sup>Two</sup></div></Page.Footer>",
+        ],
+    );
+}
+
+#[test]
 fn gives_every_lowered_operation_source_provenance() {
     let source = "var value; function read() { return value; }";
     let module = lower_source_file("input.mjs", source).unwrap();
