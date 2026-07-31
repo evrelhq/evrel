@@ -1,0 +1,18 @@
+[package]
+name = "evrel-codegen-web"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+evrel-js-ir = { path = "../evrel-js-ir" }
+oxc_allocator.workspace = true
+oxc_ast.workspace = true
+oxc_codegen.workspace = true
+oxc_span.workspace = true
+oxc_syntax.workspace = true
+rustc-hash.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+evrel-frontend = { path = "../evrel-frontend" }
+oxc_parser.workspace = true

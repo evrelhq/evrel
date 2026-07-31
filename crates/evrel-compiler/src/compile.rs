@@ -1,10 +1,10 @@
 //! Single-source compiler entrypoints.
 
-use evrel_codegen_js::generate;
+use evrel_codegen_web::generate;
 use evrel_frontend::lower_source_file;
 use evrel_js_ir::{JsFunctionIr, JsModuleIr};
-use evrel_middle::analysis::{ProgramLinkage, ProgramReachability};
-use evrel_middle::transform::{
+use evrel_middle::js::analysis::{ProgramLinkage, ProgramReachability};
+use evrel_middle::js::transform::{
     eliminate_common_subexpressions, eliminate_dead_bindings, eliminate_dead_code,
     promote_bindings_to_ssa, propagate_constants, prune_module_graph, prune_unreachable_blocks,
     prune_unreachable_functions, simplify_block_parameters, simplify_control_flow,

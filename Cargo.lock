@@ -208,7 +208,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "evrel-codegen-js"
+name = "evrel-codegen-web"
 version = "0.1.0"
 dependencies = [
  "evrel-frontend",
@@ -227,7 +227,7 @@ dependencies = [
 name = "evrel-compiler"
 version = "0.1.0"
 dependencies = [
- "evrel-codegen-js",
+ "evrel-codegen-web",
  "evrel-frontend",
  "evrel-js-ir",
  "evrel-middle",

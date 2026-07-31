@@ -1,6 +1,3 @@
-//! Analyses and transformations over Evrel IR.
+//! Analyses and transformations for Evrel's intermediate representations.
 
-mod work_queue;
-
-pub mod analysis;
-pub mod transform;
+pub mod js;

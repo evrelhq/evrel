@@ -3,7 +3,7 @@ resolver = "3"
 members = [
     "crates/evrel-js-ir",
     "crates/evrel-frontend",
-    "crates/evrel-codegen-js",
+    "crates/evrel-codegen-web",
     "crates/evrel-compiler",
     "crates/evrel-middle",
     "crates/evrel-cli",

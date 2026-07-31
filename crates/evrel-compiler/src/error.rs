@@ -36,5 +36,5 @@ pub enum CompilerError {
 
     /// JavaScript output planning or emission failed.
     #[error(transparent)]
-    JavaScriptCodegen(#[from] evrel_codegen_js::JsCodegenError),
+    JavaScriptCodegen(#[from] evrel_codegen_web::JsCodegenError),
 }

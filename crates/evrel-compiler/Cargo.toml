@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-evrel-codegen-js = { path = "../evrel-codegen-js" }
+evrel-codegen-web = { path = "../evrel-codegen-web" }
 evrel-frontend = { path = "../evrel-frontend" }
 evrel-js-ir = { path = "../evrel-js-ir" }
 evrel-middle = { path = "../evrel-middle" }

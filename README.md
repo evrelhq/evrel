@@ -6,7 +6,7 @@ This repository contains the compiler's JavaScript pipeline:
 
 - `evrel-js-ir` defines the compiler intermediate JS representation.
 - `evrel-frontend` parses and lowers JavaScript and TypeScript into the IR.
-- `evrel-codegen-js` plans and emits JavaScript from the IR.
+- `evrel-codegen-web` plans and emits web output from the IR.
 - `evrel-compiler` exposes the end-to-end compiler API.
 - `evrel-cli` provides the `evrel` command-line interface.
 - `evrel-node` provides the `@evrel/compiler` Node.js binding.
