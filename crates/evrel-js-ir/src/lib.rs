@@ -24,8 +24,8 @@ pub use function::{
 };
 pub use ids::{
     BindingId, BlockId, ExceptionHandlerId, FunctionId, LabeledStatementId, LocationId, ModuleId,
-    OperationId, PrivateNameId, ProgramBindingId, ProgramFunctionId, RegionId, SourceFileId,
-    TemplateSiteId, ValueId,
+    OperationId, PrivateNameId, ProgramBindingId, ProgramFunctionId, ProgramOperationId,
+    ProgramRegionId, RegionId, SourceFileId, TemplateSiteId, ValueId,
 };
 pub use module::{
     JsModuleIr, ModuleAttribute, ModuleBuilder, ModuleEditor, ModuleExport, ModuleExportName,

@@ -254,6 +254,64 @@ impl ProgramFunctionId {
     }
 }
 
+/// Identifies one region within a whole program.
+///
+/// A [`RegionId`] is only unique within its owning function. Qualifying it
+/// with a [`ProgramFunctionId`] makes it safe to retain in program-wide IRs
+/// and analyses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ProgramRegionId {
+    function: ProgramFunctionId,
+    region: RegionId,
+}
+
+impl ProgramRegionId {
+    /// Qualifies a function-local region ID.
+    pub const fn new(function: ProgramFunctionId, region: RegionId) -> Self {
+        Self { function, region }
+    }
+
+    /// Returns the function that owns the region.
+    pub const fn function(self) -> ProgramFunctionId {
+        self.function
+    }
+
+    /// Returns the function-local region ID.
+    pub const fn region(self) -> RegionId {
+        self.region
+    }
+}
+
+/// Identifies one operation within a whole program.
+///
+/// An [`OperationId`] is only unique within its owning function. Qualifying it
+/// with a [`ProgramFunctionId`] makes it safe to use across program analyses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ProgramOperationId {
+    function: ProgramFunctionId,
+    operation: OperationId,
+}
+
+impl ProgramOperationId {
+    /// Qualifies a function-local operation ID.
+    pub const fn new(function: ProgramFunctionId, operation: OperationId) -> Self {
+        Self {
+            function,
+            operation,
+        }
+    }
+
+    /// Returns the function that owns the operation.
+    pub const fn function(self) -> ProgramFunctionId {
+        self.function
+    }
+
+    /// Returns the function-local operation ID.
+    pub const fn operation(self) -> OperationId {
+        self.operation
+    }
+}
+
 /// Identifies a basic block within a function's IR.
 ///
 /// A `BlockId` is only valid in the function that allocated it.
@@ -444,7 +502,8 @@ impl ArenaId for ValueId {
 mod tests {
     use super::{
         BindingId, BlockId, ExceptionHandlerId, FunctionId, ModuleId, OperationId,
-        ProgramBindingId, ProgramFunctionId, RegionId, TemplateSiteId, ValueId,
+        ProgramBindingId, ProgramFunctionId, ProgramOperationId, ProgramRegionId, RegionId,
+        TemplateSiteId, ValueId,
     };
 
     #[test]
@@ -473,6 +532,36 @@ mod tests {
         assert_ne!(first, second);
         assert_eq!(first.module(), first_module);
         assert_eq!(first.function(), function);
+    }
+
+    #[test]
+    fn qualifies_operation_ids_by_function() {
+        let operation = OperationId::from_index(0);
+        let module = ModuleId::from_index(0);
+        let first_function = ProgramFunctionId::new(module, FunctionId::from_index(0));
+        let second_function = ProgramFunctionId::new(module, FunctionId::from_index(1));
+
+        let first = ProgramOperationId::new(first_function, operation);
+        let second = ProgramOperationId::new(second_function, operation);
+
+        assert_ne!(first, second);
+        assert_eq!(first.function(), first_function);
+        assert_eq!(first.operation(), operation);
+    }
+
+    #[test]
+    fn qualifies_region_ids_by_function() {
+        let region = RegionId::from_index(0);
+        let module = ModuleId::from_index(0);
+        let first_function = ProgramFunctionId::new(module, FunctionId::from_index(0));
+        let second_function = ProgramFunctionId::new(module, FunctionId::from_index(1));
+
+        let first = ProgramRegionId::new(first_function, region);
+        let second = ProgramRegionId::new(second_function, region);
+
+        assert_ne!(first, second);
+        assert_eq!(first.function(), first_function);
+        assert_eq!(first.region(), region);
     }
 
     #[test]
