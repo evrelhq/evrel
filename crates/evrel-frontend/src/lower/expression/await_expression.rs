@@ -1,6 +1,6 @@
 //! JavaScript await-expression lowering.
 
-use evrel_ir::{AwaitOp, OperationKind, ValueId};
+use evrel_js_ir::{AwaitOp, OperationKind, ValueId};
 use oxc_ast::ast::AwaitExpression;
 
 use crate::{FrontendError, lower::FunctionLowerer};

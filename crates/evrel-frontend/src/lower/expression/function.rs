@@ -1,6 +1,6 @@
 //! JavaScript function-expression lowering.
 
-use evrel_ir::{CreateFunctionOp, FunctionKind, FunctionMode, OperationKind, ReturnOp, ValueId};
+use evrel_js_ir::{CreateFunctionOp, FunctionKind, FunctionMode, OperationKind, ReturnOp, ValueId};
 use oxc_ast::ast::{ArrowFunctionExpression, Function};
 
 use crate::{

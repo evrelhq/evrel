@@ -1,6 +1,6 @@
 //! Function parameter lowering.
 
-use evrel_ir::{BindingKind, BindingPattern, FunctionParameterKind, PatternExpression};
+use evrel_js_ir::{BindingKind, BindingPattern, FunctionParameterKind, PatternExpression};
 use oxc_ast::ast::{BindingPattern as OxcBindingPattern, Expression, FormalParameters};
 
 use crate::{

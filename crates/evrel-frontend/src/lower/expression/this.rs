@@ -1,6 +1,6 @@
 //! JavaScript `this` expression lowering.
 
-use evrel_ir::{LoadThisOp, OperationKind, ValueId};
+use evrel_js_ir::{LoadThisOp, OperationKind, ValueId};
 use oxc_ast::ast::ThisExpression;
 
 use crate::lower::FunctionLowerer;

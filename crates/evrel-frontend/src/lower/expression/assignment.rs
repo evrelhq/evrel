@@ -1,6 +1,6 @@
 //! JavaScript assignment-expression lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     BinaryOp, BinaryOperator, BindingId, BlockTarget, IfOp, IsNullishOp, JumpOp, LoadBindingOp,
     LoadGlobalOp, LoadPropertyOp, LoadSuperPropertyOp, OperationKind, PrivateNameId, PropertyKey,
     StoreBindingOp, StoreGlobalOp, StorePropertyOp, StoreSuperPropertyOp, SuperPropertyKey,

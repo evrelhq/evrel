@@ -1,6 +1,6 @@
 //! Pruning of unreachable modules and module-interface entries.
 
-use evrel_ir::ProgramIr;
+use evrel_js_ir::JsProgramIr;
 
 use crate::analysis::ProgramReachability;
 
@@ -31,7 +31,7 @@ impl ModuleGraphPruning {
 /// Unreachable modules are removed before the import/export interface of each
 /// retained module is pruned.
 pub fn prune_module_graph(
-    program: &mut ProgramIr,
+    program: &mut JsProgramIr,
     reachability: &ProgramReachability,
 ) -> ModuleGraphPruning {
     let removed_modules = modules::prune(program, reachability);

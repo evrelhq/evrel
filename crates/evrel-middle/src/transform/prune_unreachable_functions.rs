@@ -1,13 +1,13 @@
 //! Removal of module-owned functions that can no longer be instantiated.
 
-use evrel_ir::{ModuleEditor, ModuleIr};
+use evrel_js_ir::{JsModuleIr, ModuleEditor};
 
 use crate::analysis::ModuleFunctionReachability;
 
 /// Removes unreachable functions and the bindings declared by them.
 ///
 /// Returns the number of removed functions.
-pub fn prune_unreachable_functions(module: &mut ModuleIr) -> usize {
+pub fn prune_unreachable_functions(module: &mut JsModuleIr) -> usize {
     let unreachable = {
         let reachability = ModuleFunctionReachability::compute(module);
 
@@ -28,8 +28,8 @@ pub fn prune_unreachable_functions(module: &mut ModuleIr) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BindingKind, CreateFunctionOp, FunctionKind, FunctionMode, ModuleBuilder, ModuleIr,
+    use evrel_js_ir::{
+        BindingKind, CreateFunctionOp, FunctionKind, FunctionMode, JsModuleIr, ModuleBuilder,
         OperationKind, UnwindTarget,
     };
 
@@ -37,7 +37,7 @@ mod tests {
 
     #[test]
     fn removes_unreachable_functions_and_their_bindings() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let entry = module.entry_function();
 
         let (reachable, unreachable, unreachable_binding) = {
@@ -50,7 +50,7 @@ mod tests {
                 builder.create_binding(unreachable, "local", BindingKind::Let);
 
             builder.function_builder(entry).append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(reachable)),
                 [],
                 UnwindTarget::Propagate,

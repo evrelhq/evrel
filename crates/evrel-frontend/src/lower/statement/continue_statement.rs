@@ -1,6 +1,6 @@
 //! JavaScript `continue` statement lowering.
 
-use evrel_ir::{BlockTarget, JumpOp, OperationKind};
+use evrel_js_ir::{BlockTarget, JumpOp, OperationKind};
 use oxc_ast::ast::ContinueStatement;
 
 use crate::{FrontendError, lower::FunctionLowerer};

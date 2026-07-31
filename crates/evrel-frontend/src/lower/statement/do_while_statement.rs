@@ -1,6 +1,6 @@
 //! JavaScript `do...while` statement lowering.
 
-use evrel_ir::{BlockTarget, DoWhileOp, JumpOp, OperationKind};
+use evrel_js_ir::{BlockTarget, DoWhileOp, JumpOp, OperationKind};
 use oxc_ast::ast::DoWhileStatement;
 
 use crate::{

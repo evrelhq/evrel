@@ -1,6 +1,6 @@
 //! Ordinary control flow within one IR region.
 
-use evrel_ir::{BlockId, FunctionIr, OperationId, RegionId, UnwindTarget};
+use evrel_js_ir::{BlockId, JsFunctionIr, OperationId, RegionId, UnwindTarget};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Identifies one executable edge in a regional CFG.
@@ -71,7 +71,7 @@ pub struct RegionControlFlowGraph {
 impl RegionControlFlowGraph {
     /// Computes ordinary control flow for one region.
     pub fn compute(
-        function: &FunctionIr,
+        function: &JsFunctionIr,
         region: RegionId,
     ) -> Result<Self, RegionControlFlowError> {
         let region_data = function

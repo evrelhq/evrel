@@ -5,7 +5,7 @@ mod control;
 mod definition;
 mod parameter;
 
-use evrel_ir::{
+use evrel_js_ir::{
     BindingId, BindingKind, BindingPattern, BlockId, BlockParameterSource, ExceptionHandlerId,
     FunctionBuilder, FunctionId, FunctionKind, FunctionMode, FunctionParameterKind,
     FunctionProperties, LabeledStatementData, LabeledStatementId, LocationId, OperationId,

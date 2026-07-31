@@ -1,8 +1,8 @@
 //! Elimination of repeated deterministic SSA expressions.
 
-use evrel_ir::{
-    BinaryOperator, BlockId, FunctionEditor, FunctionIr, OperationData, OperationId, OperationKind,
-    TypeofTarget, UnaryOperator, ValueId,
+use evrel_js_ir::{
+    BinaryOperator, BlockId, FunctionEditor, JsFunctionIr, OperationData, OperationId,
+    OperationKind, TypeofTarget, UnaryOperator, ValueId,
 };
 use rustc_hash::FxHashMap;
 
@@ -15,7 +15,7 @@ use crate::analysis::{
 ///
 /// Returns zero when the function's value flow or control flow cannot be
 /// modeled soundly.
-pub fn eliminate_common_subexpressions(function: &mut FunctionIr) -> usize {
+pub fn eliminate_common_subexpressions(function: &mut JsFunctionIr) -> usize {
     let replacements = {
         let Ok(values) = FunctionValueAnalysis::compute(function) else {
             return 0;
@@ -66,7 +66,7 @@ enum Visit {
 }
 
 fn plan_replacements(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     values: &FunctionValueAnalysis,
 ) -> Option<Vec<Replacement>> {
     let mut replacements = Vec::new();
@@ -82,7 +82,7 @@ fn plan_replacements(
 }
 
 fn plan_region_replacements(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     values: &FunctionValueAnalysis,
     dominators: &RegionDominatorTree,
     replacements: &mut Vec<Replacement>,
@@ -172,7 +172,7 @@ fn expression_key(operation: &OperationData) -> Option<ExpressionKey> {
     })
 }
 
-fn apply_replacements(function: &mut FunctionIr, replacements: Vec<Replacement>) -> usize {
+fn apply_replacements(function: &mut JsFunctionIr, replacements: Vec<Replacement>) -> usize {
     let removed = replacements.len();
     let operations = replacements
         .iter()
@@ -192,9 +192,9 @@ fn apply_replacements(function: &mut FunctionIr, replacements: Vec<Replacement>)
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BinaryOp, BinaryOperator, BlockTarget, ConstantOp, ConstantValue, IfOp, JumpOp,
-        LoadGlobalOp, LoadThisOp, ModuleBuilder, ModuleIr, OperationId, OperationKind, ReturnOp,
+    use evrel_js_ir::{
+        BinaryOp, BinaryOperator, BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, JumpOp,
+        LoadGlobalOp, LoadThisOp, ModuleBuilder, OperationId, OperationKind, ReturnOp,
         UnwindTarget, ValueId,
     };
 
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn removes_a_repeated_expression_in_one_block() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (first, first_result, repeated, returned) = {
@@ -215,7 +215,7 @@ mod tests {
             let (repeated, repeated_result) = append_addition(&mut builder, left, right);
 
             let returned = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
                 UnwindTarget::Propagate,
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn removes_an_expression_dominated_by_an_earlier_block() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (first, first_result, repeated, returned) = {
@@ -258,7 +258,7 @@ mod tests {
             let (first, first_result) = append_addition(&mut builder, left, right);
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(successor, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -267,7 +267,7 @@ mod tests {
             builder.switch_to_block(successor);
             let (repeated, repeated_result) = append_addition(&mut builder, left, right);
             let returned = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
                 UnwindTarget::Propagate,
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn preserves_expressions_from_sibling_blocks() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (left_addition, right_addition) = {
@@ -311,7 +311,7 @@ mod tests {
             let operand_right = append_number(&mut builder, 22.0);
 
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadThis(LoadThisOp::new()),
                 [],
                 UnwindTarget::Propagate,
@@ -319,7 +319,7 @@ mod tests {
             let condition = builder.operation_results(condition)[0];
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left_block, 0),
                     BlockTarget::new(right_block, 0),
@@ -333,7 +333,7 @@ mod tests {
             let (left_addition, left_result) =
                 append_addition(&mut builder, operand_left, operand_right);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [left_result],
                 UnwindTarget::Propagate,
@@ -343,7 +343,7 @@ mod tests {
             let (right_addition, right_result) =
                 append_addition(&mut builder, operand_left, operand_right);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [right_result],
                 UnwindTarget::Propagate,
@@ -352,7 +352,7 @@ mod tests {
             builder.switch_to_block(completion);
             let undefined = append_undefined(&mut builder);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [undefined],
                 UnwindTarget::Propagate,
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn preserves_repeated_expressions_that_may_be_observable() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (first, repeated) = {
@@ -382,7 +382,7 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let unknown = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
                 [],
                 UnwindTarget::Propagate,
@@ -394,7 +394,7 @@ mod tests {
             let (repeated, repeated_result) = append_addition(&mut builder, unknown, one);
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
                 UnwindTarget::Propagate,
@@ -415,12 +415,12 @@ mod tests {
     }
 
     fn append_addition(
-        builder: &mut evrel_ir::FunctionBuilder<'_>,
+        builder: &mut evrel_js_ir::FunctionBuilder<'_>,
         left: ValueId,
         right: ValueId,
     ) -> (OperationId, ValueId) {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [left, right],
             UnwindTarget::Propagate,
@@ -429,9 +429,9 @@ mod tests {
         (operation, builder.operation_results(operation)[0])
     }
 
-    fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
+    fn append_number(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,
@@ -440,9 +440,9 @@ mod tests {
         builder.operation_results(operation)[0]
     }
 
-    fn append_undefined(builder: &mut evrel_ir::FunctionBuilder<'_>) -> ValueId {
+    fn append_undefined(builder: &mut evrel_js_ir::FunctionBuilder<'_>) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
             UnwindTarget::Propagate,

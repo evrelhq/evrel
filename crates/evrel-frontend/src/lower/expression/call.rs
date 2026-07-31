@@ -1,6 +1,6 @@
 //! JavaScript call-expression lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     CallOp, CallReceiver, CallTarget, OperationKind, PropertyKey, SuperCallOp, SuperPropertyKey,
     ValueId,
 };

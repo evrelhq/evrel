@@ -58,7 +58,7 @@ fn semantic_coverage_manifest_matches_the_compiler_architecture() {
         &expected_statements,
     );
 
-    let expected_ir_variants = extract_public_enum_variants(&crate_root.join("../evrel-ir/src"));
+    let expected_ir_variants = extract_public_enum_variants(&crate_root.join("../evrel-js-ir/src"));
     assert_exact_keys(
         "public operation enum variants",
         ir_variants,

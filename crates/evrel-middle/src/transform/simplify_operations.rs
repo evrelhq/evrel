@@ -1,7 +1,7 @@
 //! Worklist-driven simplification of local JavaScript operations.
 
-use evrel_ir::{
-    BinaryOperator, ConstantValue, FunctionEditor, FunctionIr, OperationId, OperationKind,
+use evrel_js_ir::{
+    BinaryOperator, ConstantValue, FunctionEditor, JsFunctionIr, OperationId, OperationKind,
     UnaryOperator, ValueDefinition, ValueId,
 };
 
@@ -15,7 +15,7 @@ use crate::work_queue::WorkQueue;
 /// rewrites and immediately revisits affected users.
 ///
 /// Returns zero when the function's value flow cannot be modeled soundly.
-pub fn simplify_operations(function: &mut FunctionIr) -> usize {
+pub fn simplify_operations(function: &mut JsFunctionIr) -> usize {
     let Ok(values) = FunctionValueAnalysis::compute(function) else {
         return 0;
     };
@@ -66,7 +66,7 @@ enum Rewrite {
 }
 
 fn plan_rewrite(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     values: &FunctionValueAnalysis,
     operation: OperationId,
 ) -> Option<Rewrite> {
@@ -102,7 +102,7 @@ fn plan_rewrite(
 }
 
 fn plan_unary(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     values: &FunctionValueAnalysis,
     operator: UnaryOperator,
     operand: ValueId,
@@ -145,7 +145,7 @@ fn plan_unary(
 }
 
 fn plan_binary(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     values: &FunctionValueAnalysis,
     operator: BinaryOperator,
     left: ValueId,
@@ -222,7 +222,7 @@ fn is_strictly_reflexive(value: &AbstractValue) -> bool {
     !types.is_empty() && !types.contains(ValueTypeSet::NUMBER)
 }
 
-fn result_users(function: &FunctionIr, operation: OperationId) -> Vec<OperationId> {
+fn result_users(function: &JsFunctionIr, operation: OperationId) -> Vec<OperationId> {
     let Some(result) = single_result(function, operation) else {
         return Vec::new();
     };
@@ -236,7 +236,7 @@ fn result_users(function: &FunctionIr, operation: OperationId) -> Vec<OperationI
         .collect()
 }
 
-fn single_result(function: &FunctionIr, operation: OperationId) -> Option<ValueId> {
+fn single_result(function: &JsFunctionIr, operation: OperationId) -> Option<ValueId> {
     let [result] = function.operation(operation)?.results() else {
         return None;
     };
@@ -244,7 +244,7 @@ fn single_result(function: &FunctionIr, operation: OperationId) -> Option<ValueI
     Some(*result)
 }
 
-fn defining_operation(function: &FunctionIr, value: ValueId) -> Option<OperationId> {
+fn defining_operation(function: &JsFunctionIr, value: ValueId) -> Option<OperationId> {
     let ValueDefinition::OperationResult { operation, .. } = function.value(value)?.definition()
     else {
         return None;
@@ -253,7 +253,7 @@ fn defining_operation(function: &FunctionIr, value: ValueId) -> Option<Operation
     Some(*operation)
 }
 
-fn constant_value(function: &FunctionIr, value: ValueId) -> Option<&ConstantValue> {
+fn constant_value(function: &JsFunctionIr, value: ValueId) -> Option<&ConstantValue> {
     let operation = defining_operation(function, value)?;
     let OperationKind::Constant(constant) = function.operation(operation)?.kind() else {
         return None;
@@ -262,7 +262,7 @@ fn constant_value(function: &FunctionIr, value: ValueId) -> Option<&ConstantValu
     Some(constant.value())
 }
 
-fn is_number(function: &FunctionIr, value: ValueId, expected: f64) -> bool {
+fn is_number(function: &JsFunctionIr, value: ValueId, expected: f64) -> bool {
     matches!(
         constant_value(function, value),
         Some(ConstantValue::Number(value))
@@ -272,16 +272,16 @@ fn is_number(function: &FunctionIr, value: ValueId, expected: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BinaryOp, BinaryOperator, ConstantOp, ConstantValue, LoadGlobalOp, ModuleBuilder, ModuleIr,
-        OperationKind, ReturnOp, UnaryOp, UnaryOperator, UnwindTarget, ValueId,
+    use evrel_js_ir::{
+        BinaryOp, BinaryOperator, ConstantOp, ConstantValue, JsModuleIr, LoadGlobalOp,
+        ModuleBuilder, OperationKind, ReturnOp, UnaryOp, UnaryOperator, UnwindTarget, ValueId,
     };
 
     use super::simplify_operations;
 
     #[test]
     fn revisits_users_after_removing_numeric_identities() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (first, second, returned, number) = {
@@ -295,7 +295,7 @@ mod tests {
             let (second, second_result) =
                 append_binary(&mut builder, BinaryOperator::Multiply, first_result, one);
             let returned = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [second_result],
                 UnwindTarget::Propagate,
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn removes_double_negation_only_for_a_proven_boolean() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (inner, outer, returned, boolean) = {
@@ -333,21 +333,21 @@ mod tests {
             let (_, boolean) =
                 append_binary(&mut builder, BinaryOperator::StrictEqual, left, right);
             let inner = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
                 [boolean],
                 UnwindTarget::Propagate,
             );
             let inner_result = builder.operation_results(inner)[0];
             let outer = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
                 [inner_result],
                 UnwindTarget::Propagate,
             );
             let outer_result = builder.operation_results(outer)[0];
             let returned = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [outer_result],
                 UnwindTarget::Propagate,
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn preserves_positive_zero_addition() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let addition = {
@@ -382,7 +382,7 @@ mod tests {
             let (addition, result) = append_binary(&mut builder, BinaryOperator::Add, number, zero);
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
                 UnwindTarget::Propagate,
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn folds_reflexive_booleans_but_preserves_possible_nan() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (boolean_equality, number_equality) = {
@@ -425,7 +425,7 @@ mod tests {
                 append_binary(&mut builder, BinaryOperator::StrictEqual, number, number);
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
                 UnwindTarget::Propagate,
@@ -453,9 +453,9 @@ mod tests {
         ));
     }
 
-    fn append_global(builder: &mut evrel_ir::FunctionBuilder<'_>, name: &str) -> ValueId {
+    fn append_global(builder: &mut evrel_js_ir::FunctionBuilder<'_>, name: &str) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new(name)),
             [],
             UnwindTarget::Propagate,
@@ -464,9 +464,9 @@ mod tests {
         builder.operation_results(operation)[0]
     }
 
-    fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
+    fn append_number(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,
@@ -476,12 +476,12 @@ mod tests {
     }
 
     fn append_unary(
-        builder: &mut evrel_ir::FunctionBuilder<'_>,
+        builder: &mut evrel_js_ir::FunctionBuilder<'_>,
         operator: UnaryOperator,
         operand: ValueId,
     ) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(operator)),
             [operand],
             UnwindTarget::Propagate,
@@ -491,13 +491,13 @@ mod tests {
     }
 
     fn append_binary(
-        builder: &mut evrel_ir::FunctionBuilder<'_>,
+        builder: &mut evrel_js_ir::FunctionBuilder<'_>,
         operator: BinaryOperator,
         left: ValueId,
         right: ValueId,
-    ) -> (evrel_ir::OperationId, ValueId) {
+    ) -> (evrel_js_ir::OperationId, ValueId) {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(operator)),
             [left, right],
             UnwindTarget::Propagate,

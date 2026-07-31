@@ -1,20 +1,20 @@
-use evrel_ir::{
+use evrel_js_ir::{
     BindingKind, BlockParameterSource, CompilerLocation, ExceptionHandlerKind, ForOfKind,
-    FunctionKind, FunctionMode, LoopKind, ModuleIr, OperationKind, TextRange, print_function,
+    FunctionKind, FunctionMode, JsModuleIr, LoopKind, OperationKind, TextRange, print_function,
     print_module,
 };
 
 use evrel_frontend::{FrontendError, lower_source_file};
 
-fn lower_javascript_module(source: &str) -> Result<ModuleIr, FrontendError> {
+fn lower_javascript_module(source: &str) -> Result<JsModuleIr, FrontendError> {
     lower_source_file("input.mjs", source)
 }
 
-fn lower_typescript_module(source: &str) -> Result<ModuleIr, FrontendError> {
+fn lower_typescript_module(source: &str) -> Result<JsModuleIr, FrontendError> {
     lower_source_file("input.ts", source)
 }
 
-fn print_entry_function(module: &ModuleIr) -> String {
+fn print_entry_function(module: &JsModuleIr) -> String {
     let function = module
         .function(module.entry_function())
         .expect("entry function must remain live");

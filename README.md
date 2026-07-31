@@ -4,7 +4,7 @@ Evrel is a JavaScript and TypeScript compiler written in Rust.
 
 This repository contains the compiler's JavaScript pipeline:
 
-- `evrel-ir` defines the compiler intermediate representation.
+- `evrel-js-ir` defines the compiler intermediate JS representation.
 - `evrel-frontend` parses and lowers JavaScript and TypeScript into the IR.
 - `evrel-codegen-js` plans and emits JavaScript from the IR.
 - `evrel-compiler` exposes the end-to-end compiler API.

@@ -1,6 +1,6 @@
 //! Shared JavaScript class-definition lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     BindingKind, ClassElement as IrClassElement, ClassElementKey, ClassField, ClassFieldPlacement,
     ClassMethod, ClassMethodKind, ClassMethodPlacement, ClassStaticBlock, CreateClassOp,
     FunctionId, FunctionKind, FunctionMode, OperationKind, ReturnOp, ValueId,

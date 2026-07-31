@@ -1,7 +1,7 @@
 //! Contextual safety queries for IR operations.
 
-use evrel_ir::{
-    BinaryOperator, FunctionIr, OperationData, OperationId, OperationKind, UnaryOperator,
+use evrel_js_ir::{
+    BinaryOperator, JsFunctionIr, OperationData, OperationId, OperationKind, UnaryOperator,
 };
 
 use super::{FunctionValueAnalysis, ValueTypeSet};
@@ -13,7 +13,7 @@ use super::{FunctionValueAnalysis, ValueTypeSet};
 /// responsible for preserving required results, control flow, and operand
 /// evaluation.
 pub fn is_safe_to_remove(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     values: &FunctionValueAnalysis,
     operation: OperationId,
 ) -> bool {
@@ -87,9 +87,9 @@ fn operands_are_definitely(
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BinaryOp, BinaryOperator, ConstantOp, ConstantValue, DebuggerOp, LoadGlobalOp,
-        ModuleBuilder, ModuleIr, OperationKind, ReturnOp, UnwindTarget, ValueId,
+    use evrel_js_ir::{
+        BinaryOp, BinaryOperator, ConstantOp, ConstantValue, DebuggerOp, JsModuleIr, LoadGlobalOp,
+        ModuleBuilder, OperationKind, ReturnOp, UnwindTarget, ValueId,
     };
 
     use super::is_safe_to_remove;
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn accepts_numeric_addition() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let addition = {
@@ -107,7 +107,7 @@ mod tests {
             let left = append_number(&mut builder, 20.0);
             let right = append_number(&mut builder, 22.0);
             let addition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
                 UnwindTarget::Propagate,
@@ -115,7 +115,7 @@ mod tests {
             let result = builder.operation_results(addition)[0];
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
                 UnwindTarget::Propagate,
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn rejects_addition_with_an_unknown_operand() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let addition = {
@@ -140,7 +140,7 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let left = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
                 [],
                 UnwindTarget::Propagate,
@@ -148,7 +148,7 @@ mod tests {
             let left = builder.operation_results(left)[0];
             let right = append_number(&mut builder, 1.0);
             let addition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
                 UnwindTarget::Propagate,
@@ -156,7 +156,7 @@ mod tests {
             let result = builder.operation_results(addition)[0];
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
                 UnwindTarget::Propagate,
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn rejects_observable_operations() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let debugger = {
@@ -181,13 +181,13 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let debugger = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Debugger(DebuggerOp::new()),
                 [],
                 UnwindTarget::Propagate,
             );
             let result = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
@@ -195,7 +195,7 @@ mod tests {
             let result = builder.operation_results(result)[0];
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
                 UnwindTarget::Propagate,
@@ -210,9 +210,9 @@ mod tests {
         assert!(!is_safe_to_remove(function, &values, debugger));
     }
 
-    fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
+    fn append_number(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,

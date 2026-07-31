@@ -1,6 +1,6 @@
 //! Removal of modules outside the program entry dependency closure.
 
-use evrel_ir::{ProgramEditor, ProgramIr};
+use evrel_js_ir::{JsProgramIr, ProgramEditor};
 
 use crate::analysis::ProgramReachability;
 
@@ -10,7 +10,7 @@ use crate::analysis::ProgramReachability;
 /// causes reachability to retain the entire program.
 ///
 /// Returns the number of removed modules.
-pub(super) fn prune(program: &mut ProgramIr, reachability: &ProgramReachability) -> usize {
+pub(super) fn prune(program: &mut JsProgramIr, reachability: &ProgramReachability) -> usize {
     let unreachable = program
         .modules()
         .map(|(module, _)| module)
@@ -27,9 +27,9 @@ pub(super) fn prune(program: &mut ProgramIr, reachability: &ProgramReachability)
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        ModuleDependency, ModuleIr, ModuleKey, ModuleRequest, ModuleRequestKind, ModuleTarget,
-        ProgramIr,
+    use evrel_js_ir::{
+        JsModuleIr, JsProgramIr, ModuleDependency, ModuleKey, ModuleRequest, ModuleRequestKind,
+        ModuleTarget,
     };
 
     use crate::analysis::{ProgramLinkage, ProgramReachability};
@@ -38,11 +38,11 @@ mod tests {
 
     #[test]
     fn removes_modules_outside_the_entry_dependency_closure() {
-        let mut program = ProgramIr::new();
-        let entry = program.add_module(ModuleKey::new("entry"), ModuleIr::new());
-        let dependency = program.add_module(ModuleKey::new("dependency"), ModuleIr::new());
+        let mut program = JsProgramIr::new();
+        let entry = program.add_module(ModuleKey::new("entry"), JsModuleIr::new());
+        let dependency = program.add_module(ModuleKey::new("dependency"), JsModuleIr::new());
         let disconnected_key = ModuleKey::new("disconnected");
-        let disconnected = program.add_module(disconnected_key.clone(), ModuleIr::new());
+        let disconnected = program.add_module(disconnected_key.clone(), JsModuleIr::new());
 
         program.add_entry_module(entry);
         program.add_dependency(ModuleDependency::new(

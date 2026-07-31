@@ -1,6 +1,6 @@
 //! JavaScript `for...in` statement lowering.
 
-use evrel_ir::{BlockTarget, ForInOp, JumpOp, OperationKind};
+use evrel_js_ir::{BlockTarget, ForInOp, JumpOp, OperationKind};
 use oxc_ast::ast::ForInStatement;
 
 use crate::{

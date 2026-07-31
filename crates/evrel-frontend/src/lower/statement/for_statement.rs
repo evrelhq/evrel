@@ -1,6 +1,6 @@
 //! JavaScript classical `for` statement lowering.
 
-use evrel_ir::{BindingId, BlockTarget, ForOp, IfOp, JumpOp, OperationKind};
+use evrel_js_ir::{BindingId, BlockTarget, ForOp, IfOp, JumpOp, OperationKind};
 use oxc_ast::ast::{ForStatement, ForStatementInit, VariableDeclarationKind};
 
 use crate::{

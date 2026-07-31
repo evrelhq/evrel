@@ -1,6 +1,6 @@
 //! JavaScript `break` statement lowering.
 
-use evrel_ir::{BlockTarget, JumpOp, OperationKind};
+use evrel_js_ir::{BlockTarget, JumpOp, OperationKind};
 use oxc_ast::ast::BreakStatement;
 
 use crate::{FrontendError, lower::FunctionLowerer};

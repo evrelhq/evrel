@@ -1,6 +1,6 @@
 //! Module-wide frontend lowering state.
 
-use evrel_ir::{BindingId, PrivateNameId, SourceFileId};
+use evrel_js_ir::{BindingId, PrivateNameId, SourceFileId};
 use oxc_ast::ast::IdentifierReference;
 use oxc_semantic::{Scoping, SymbolId};
 use rustc_hash::FxHashMap;

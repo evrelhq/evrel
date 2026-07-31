@@ -1,6 +1,6 @@
 //! JavaScript `switch` statement lowering.
 
-use evrel_ir::{BlockTarget, JumpOp, OperationKind, SwitchCase as IrSwitchCase, SwitchOp};
+use evrel_js_ir::{BlockTarget, JumpOp, OperationKind, SwitchCase as IrSwitchCase, SwitchOp};
 use oxc_ast::ast::SwitchStatement;
 
 use crate::{

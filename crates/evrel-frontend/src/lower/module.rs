@@ -1,8 +1,8 @@
 //! JavaScript module lowering.
 
-use evrel_ir::{
-    BindingId, BindingKind, FunctionProperties, ModuleBuilder, ModuleExport,
-    ModuleExportName as IrModuleExportName, ModuleImport, ModuleIr, SourceFileId, TextRange,
+use evrel_js_ir::{
+    BindingId, BindingKind, FunctionProperties, JsModuleIr, ModuleBuilder, ModuleExport,
+    ModuleExportName as IrModuleExportName, ModuleImport, SourceFileId, TextRange,
 };
 use oxc_ast::ast::{
     Declaration, ExportDefaultDeclarationKind, ImportDeclarationSpecifier, ImportOrExportKind,
@@ -26,7 +26,7 @@ pub(crate) fn lower_module(
     parsed: &ParsedModule<'_>,
     source_name: &str,
     source_text: &str,
-) -> Result<ModuleIr, FrontendError> {
+) -> Result<JsModuleIr, FrontendError> {
     let mut properties = if parsed.program().source_type.is_strict() {
         FunctionProperties::strict()
     } else {
@@ -40,7 +40,7 @@ pub(crate) fn lower_module(
     {
         properties = properties.with_use_strict_directive();
     }
-    let mut module = ModuleIr::with_entry_properties(properties);
+    let mut module = JsModuleIr::with_entry_properties(properties);
 
     {
         let mut module_builder = ModuleBuilder::new(&mut module);
@@ -48,7 +48,7 @@ pub(crate) fn lower_module(
         let program_span = parsed.program().span();
         let program_location = module_builder.source_location(
             source_file,
-            evrel_ir::TextRange::new(program_span.start, program_span.end),
+            evrel_js_ir::TextRange::new(program_span.start, program_span.end),
         );
         let bindings_by_symbol = declare_root_bindings(
             &mut module_builder,
@@ -351,7 +351,7 @@ fn source_location(
     builder: &mut ModuleBuilder<'_>,
     source_file: SourceFileId,
     span: Span,
-) -> evrel_ir::LocationId {
+) -> evrel_js_ir::LocationId {
     builder.source_location(source_file, TextRange::new(span.start, span.end))
 }
 

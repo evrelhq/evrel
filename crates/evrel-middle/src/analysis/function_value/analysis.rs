@@ -1,6 +1,6 @@
 //! Public facade for function-local value analysis.
 
-use evrel_ir::{BlockId, FunctionIr, OperationId, ValueId};
+use evrel_js_ir::{BlockId, JsFunctionIr, OperationId, ValueId};
 
 use crate::analysis::RegionControlFlowError;
 
@@ -19,13 +19,13 @@ pub struct FunctionValueAnalysis {
 
 impl FunctionValueAnalysis {
     /// Computes value facts with unknown external inputs.
-    pub fn compute(function: &FunctionIr) -> Result<Self, RegionControlFlowError> {
+    pub fn compute(function: &JsFunctionIr) -> Result<Self, RegionControlFlowError> {
         Self::compute_with_inputs(function, &FunctionValueInputs::new())
     }
 
     /// Computes value facts with explicitly supplied boundary or result facts.
     pub fn compute_with_inputs(
-        function: &FunctionIr,
+        function: &JsFunctionIr,
         inputs: &FunctionValueInputs,
     ) -> Result<Self, RegionControlFlowError> {
         Ok(Self {
@@ -56,7 +56,7 @@ impl FunctionValueAnalysis {
     /// for preserving operation-specific structured semantics.
     pub fn unique_executable_successor(
         &self,
-        function: &FunctionIr,
+        function: &JsFunctionIr,
         terminator: OperationId,
     ) -> Option<usize> {
         let successor_count = function.operation(terminator)?.successors().len();

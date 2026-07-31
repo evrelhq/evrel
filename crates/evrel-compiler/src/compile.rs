@@ -2,7 +2,7 @@
 
 use evrel_codegen_js::generate;
 use evrel_frontend::lower_source_file;
-use evrel_ir::{FunctionIr, ModuleIr};
+use evrel_js_ir::{JsFunctionIr, JsModuleIr};
 use evrel_middle::analysis::{ProgramLinkage, ProgramReachability};
 use evrel_middle::transform::{
     eliminate_common_subexpressions, eliminate_dead_bindings, eliminate_dead_code,
@@ -58,7 +58,7 @@ pub fn compile_program(input: ProgramInput) -> Result<ProgramOutput, CompilerErr
     Ok(ProgramOutput::new(output))
 }
 
-fn compile_module(module: &mut ModuleIr) -> Result<CompileOutput, CompilerError> {
+fn compile_module(module: &mut JsModuleIr) -> Result<CompileOutput, CompilerError> {
     eliminate_dead_bindings(module);
     promote_bindings_to_ssa(module);
 
@@ -89,7 +89,7 @@ fn compile_module(module: &mut ModuleIr) -> Result<CompileOutput, CompilerError>
     Ok(CompileOutput::new(code))
 }
 
-fn optimize_function(function: &mut FunctionIr) {
+fn optimize_function(function: &mut JsFunctionIr) {
     propagate_constants(function);
     simplify_operations(function);
 

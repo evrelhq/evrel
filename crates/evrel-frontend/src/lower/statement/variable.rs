@@ -1,6 +1,6 @@
 //! JavaScript variable-declaration lowering.
 
-use evrel_ir::{BindingId, BindingWriteMode, ConstantOp, ConstantValue, OperationKind};
+use evrel_js_ir::{BindingId, BindingWriteMode, ConstantOp, ConstantValue, OperationKind};
 use oxc_ast::ast::{
     BindingPattern as OxcBindingPattern, VariableDeclaration, VariableDeclarationKind,
     VariableDeclarator,

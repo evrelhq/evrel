@@ -1,6 +1,6 @@
 //! Conversion of source-level module attributes into Evrel data.
 
-use evrel_ir::{ModuleAttribute, ModuleExportName};
+use evrel_js_ir::{ModuleAttribute, ModuleExportName};
 use oxc_ast::ast::{ImportAttributeKey, WithClause};
 
 pub(crate) fn lower_module_attributes(clause: Option<&WithClause<'_>>) -> Vec<ModuleAttribute> {

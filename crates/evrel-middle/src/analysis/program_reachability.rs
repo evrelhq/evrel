@@ -2,9 +2,10 @@
 
 use std::collections::VecDeque;
 
-use evrel_ir::{
-    ConstantValue, ModuleAttribute, ModuleDependency, ModuleExport, ModuleId, ModuleImport,
-    ModuleRequestKind, ModuleTarget, OperationKind, ProgramBindingId, ProgramIr, ValueDefinition,
+use evrel_js_ir::{
+    ConstantValue, JsProgramIr, ModuleAttribute, ModuleDependency, ModuleExport, ModuleId,
+    ModuleImport, ModuleRequestKind, ModuleTarget, OperationKind, ProgramBindingId,
+    ValueDefinition,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -30,7 +31,7 @@ impl ProgramReachability {
     /// If a reachable static import or re-export has no unique resolved edge,
     /// every owned module and binding is retained because the missing target
     /// could refer to any program entity.
-    pub fn compute(program: &ProgramIr, linkage: &ProgramLinkage) -> Self {
+    pub fn compute(program: &JsProgramIr, linkage: &ProgramLinkage) -> Self {
         let dependencies = DependencyIndex::new(program);
         let mut evaluated_modules = FxHashSet::default();
         let mut live_bindings = FxHashSet::default();
@@ -192,7 +193,7 @@ impl ProgramReachability {
             .contains(&ProgramExport { module, export })
     }
 
-    fn retain_all(program: &ProgramIr) -> Self {
+    fn retain_all(program: &JsProgramIr) -> Self {
         Self {
             evaluated_modules: program.modules().map(|(module, _)| module).collect(),
             live_bindings: program
@@ -234,7 +235,7 @@ enum ExportDemand {
 }
 
 fn compute_live_exports(
-    program: &ProgramIr,
+    program: &JsProgramIr,
     dependencies: &DependencyIndex<'_>,
     live_bindings: &FxHashSet<ProgramBindingId>,
     live_namespaces: &FxHashSet<ModuleId>,
@@ -443,7 +444,7 @@ fn push_export_demand(
 }
 
 fn retain_entry_exports(
-    program: &ProgramIr,
+    program: &JsProgramIr,
     dependencies: &DependencyIndex<'_>,
     module: ModuleId,
     work: &mut WorkQueue<ReachabilityFact>,
@@ -493,7 +494,7 @@ struct DependencyIndex<'program> {
 }
 
 impl<'program> DependencyIndex<'program> {
-    fn new(program: &'program ProgramIr) -> Self {
+    fn new(program: &'program JsProgramIr) -> Self {
         let mut by_importer = FxHashMap::default();
 
         for dependency in program.dependencies() {
@@ -513,7 +514,7 @@ impl<'program> DependencyIndex<'program> {
             .unwrap_or_default()
     }
 
-    fn has_complete_linkage(&self, importer: ModuleId, module: &evrel_ir::ModuleIr) -> bool {
+    fn has_complete_linkage(&self, importer: ModuleId, module: &evrel_js_ir::JsModuleIr) -> bool {
         let static_requests_are_resolved = module.imports().iter().all(|import| {
             self.has_unique_target(
                 importer,
@@ -541,7 +542,7 @@ impl<'program> DependencyIndex<'program> {
     fn has_complete_dynamic_linkage(
         &self,
         importer: ModuleId,
-        function: &evrel_ir::FunctionIr,
+        function: &evrel_js_ir::JsFunctionIr,
     ) -> bool {
         function.operations().all(|(_, operation)| {
             let OperationKind::DynamicImport(dynamic_import) = operation.kind() else {
@@ -615,16 +616,16 @@ impl<'program> DependencyIndex<'program> {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BindingKind, ConstantOp, ConstantValue, DynamicImportOp, DynamicImportPhase, JsString,
-        LoadBindingOp, LocationId, ModuleBuilder, ModuleDependency, ModuleExport, ModuleExportName,
-        ModuleImport, ModuleIr, ModuleKey, ModuleRequest, ModuleRequestKind, ModuleTarget,
-        OperationKind, ProgramBindingId, ProgramIr, UnwindTarget,
+    use evrel_js_ir::{
+        BindingKind, ConstantOp, ConstantValue, DynamicImportOp, DynamicImportPhase, JsModuleIr,
+        JsProgramIr, JsString, LoadBindingOp, LocationId, ModuleBuilder, ModuleDependency,
+        ModuleExport, ModuleExportName, ModuleImport, ModuleKey, ModuleRequest, ModuleRequestKind,
+        ModuleTarget, OperationKind, ProgramBindingId, UnwindTarget,
     };
 
     use super::{ProgramLinkage, ProgramReachability};
 
-    fn compute(program: &ProgramIr) -> ProgramReachability {
+    fn compute(program: &JsProgramIr) -> ProgramReachability {
         let linkage = ProgramLinkage::analyze(program);
 
         ProgramReachability::compute(program, &linkage)
@@ -632,10 +633,10 @@ mod tests {
 
     #[test]
     fn follows_internal_dependencies_from_entry_modules() {
-        let mut program = ProgramIr::new();
-        let entry = program.add_module(ModuleKey::new("entry"), ModuleIr::new());
-        let dependency = program.add_module(ModuleKey::new("dependency"), ModuleIr::new());
-        let disconnected = program.add_module(ModuleKey::new("disconnected"), ModuleIr::new());
+        let mut program = JsProgramIr::new();
+        let entry = program.add_module(ModuleKey::new("entry"), JsModuleIr::new());
+        let dependency = program.add_module(ModuleKey::new("dependency"), JsModuleIr::new());
+        let disconnected = program.add_module(ModuleKey::new("disconnected"), JsModuleIr::new());
 
         program.add_entry_module(entry);
         program.add_dependency(ModuleDependency::new(
@@ -653,17 +654,17 @@ mod tests {
 
     #[test]
     fn retains_every_module_when_static_linkage_is_incomplete() {
-        let mut entry_ir = ModuleIr::new();
+        let mut entry_ir = JsModuleIr::new();
         ModuleBuilder::new(&mut entry_ir).add_import(ModuleImport::bare(
             LocationId::UNKNOWN,
             "./missing.js",
             [],
         ));
 
-        let mut program = ProgramIr::new();
+        let mut program = JsProgramIr::new();
         let entry = program.add_module(ModuleKey::new("entry"), entry_ir);
         let possible_target =
-            program.add_module(ModuleKey::new("possible-target"), ModuleIr::new());
+            program.add_module(ModuleKey::new("possible-target"), JsModuleIr::new());
         program.add_entry_module(entry);
 
         let reachability = compute(&program);
@@ -674,7 +675,7 @@ mod tests {
 
     #[test]
     fn retains_every_module_when_a_dynamic_import_is_unresolved() {
-        let mut entry_ir = ModuleIr::new();
+        let mut entry_ir = JsModuleIr::new();
         let entry_function = entry_ir.entry_function();
         let mut module_builder = ModuleBuilder::new(&mut entry_ir);
         let mut builder = module_builder.function_builder(entry_function);
@@ -698,10 +699,10 @@ mod tests {
             UnwindTarget::Propagate,
         );
 
-        let mut program = ProgramIr::new();
+        let mut program = JsProgramIr::new();
         let entry = program.add_module(ModuleKey::new("entry"), entry_ir);
         let possible_target =
-            program.add_module(ModuleKey::new("possible-target"), ModuleIr::new());
+            program.add_module(ModuleKey::new("possible-target"), JsModuleIr::new());
         program.add_entry_module(entry);
 
         let reachability = compute(&program);
@@ -712,7 +713,7 @@ mod tests {
 
     #[test]
     fn follows_a_used_import_to_its_exported_binding() {
-        let mut dependency_ir = ModuleIr::new();
+        let mut dependency_ir = JsModuleIr::new();
         let dependency_entry = dependency_ir.entry_function();
         let dependency_binding = {
             let mut builder = ModuleBuilder::new(&mut dependency_ir);
@@ -725,7 +726,7 @@ mod tests {
             binding
         };
 
-        let mut entry_ir = ModuleIr::new();
+        let mut entry_ir = JsModuleIr::new();
         let entry_function = entry_ir.entry_function();
         let imported_binding = {
             let mut builder = ModuleBuilder::new(&mut entry_ir);
@@ -746,7 +747,7 @@ mod tests {
             binding
         };
 
-        let mut program = ProgramIr::new();
+        let mut program = JsProgramIr::new();
         let entry = program.add_module(ModuleKey::new("entry"), entry_ir);
         let dependency = program.add_module(ModuleKey::new("dependency"), dependency_ir);
         program.add_entry_module(entry);
@@ -768,7 +769,7 @@ mod tests {
 
     #[test]
     fn evaluates_an_imported_module_without_marking_unused_bindings_live() {
-        let mut dependency_ir = ModuleIr::new();
+        let mut dependency_ir = JsModuleIr::new();
         let dependency_entry = dependency_ir.entry_function();
         let dependency_binding = ModuleBuilder::new(&mut dependency_ir).create_binding(
             dependency_entry,
@@ -776,7 +777,7 @@ mod tests {
             BindingKind::Const,
         );
 
-        let mut entry_ir = ModuleIr::new();
+        let mut entry_ir = JsModuleIr::new();
         let entry_function = entry_ir.entry_function();
         let imported_binding = {
             let mut builder = ModuleBuilder::new(&mut entry_ir);
@@ -791,7 +792,7 @@ mod tests {
             binding
         };
 
-        let mut program = ProgramIr::new();
+        let mut program = JsProgramIr::new();
         let entry = program.add_module(ModuleKey::new("entry"), entry_ir);
         let dependency = program.add_module(ModuleKey::new("dependency"), dependency_ir);
         program.add_entry_module(entry);

@@ -1,7 +1,7 @@
 //! Elimination of dead module bindings with removable initialization cells.
 
-use evrel_ir::{
-    BindingId, BindingKind, FunctionEditor, FunctionId, ModuleEditor, ModuleIr, OperationId,
+use evrel_js_ir::{
+    BindingId, BindingKind, FunctionEditor, FunctionId, JsModuleIr, ModuleEditor, OperationId,
     OperationKind,
 };
 use rustc_hash::FxHashSet;
@@ -15,7 +15,7 @@ use rustc_hash::FxHashSet;
 /// imports, or other binding semantics.
 ///
 /// Returns the number of removed bindings.
-pub fn eliminate_dead_bindings(module: &mut ModuleIr) -> usize {
+pub fn eliminate_dead_bindings(module: &mut JsModuleIr) -> usize {
     if has_possible_direct_eval(module) {
         return 0;
     }
@@ -61,7 +61,7 @@ pub fn eliminate_dead_bindings(module: &mut ModuleIr) -> usize {
     removed
 }
 
-fn has_possible_direct_eval(module: &ModuleIr) -> bool {
+fn has_possible_direct_eval(module: &JsModuleIr) -> bool {
     module.functions().any(|(_, function)| {
         function.operations().any(|(_, operation)| {
             matches!(
@@ -77,7 +77,10 @@ struct BindingRemoval {
     initializations: Vec<(FunctionId, Vec<OperationId>)>,
 }
 
-fn plan_binding_removal(module: &evrel_ir::ModuleIr, binding: BindingId) -> Option<BindingRemoval> {
+fn plan_binding_removal(
+    module: &evrel_js_ir::JsModuleIr,
+    binding: BindingId,
+) -> Option<BindingRemoval> {
     let mut initializations = Vec::new();
 
     for (function_id, function) in module.functions() {
@@ -114,9 +117,9 @@ fn plan_binding_removal(module: &evrel_ir::ModuleIr, binding: BindingId) -> Opti
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BindingKind, ConstantOp, ConstantValue, InitializeBindingOp, LoadGlobalOp, LocationId,
-        ModuleBuilder, ModuleExport, ModuleExportName, ModuleIr, OperationId, OperationKind,
+    use evrel_js_ir::{
+        BindingKind, ConstantOp, ConstantValue, InitializeBindingOp, JsModuleIr, LoadGlobalOp,
+        LocationId, ModuleBuilder, ModuleExport, ModuleExportName, OperationId, OperationKind,
         UnwindTarget,
     };
 
@@ -124,7 +127,7 @@ mod tests {
 
     #[test]
     fn removes_an_unexported_binding_but_leaves_its_initializer_value() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let (binding, value, initialization) = add_initialized_binding(&mut module);
         let entry = module.entry_function();
 
@@ -140,7 +143,7 @@ mod tests {
 
     #[test]
     fn preserves_a_binding_exposed_by_the_module_interface() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let (binding, _, initialization) = add_initialized_binding(&mut module);
         ModuleBuilder::new(&mut module).add_export(ModuleExport::local(
             LocationId::UNKNOWN,
@@ -161,7 +164,7 @@ mod tests {
 
     #[test]
     fn preserves_module_bindings_visible_to_possible_direct_eval() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let (binding, _, initialization) = add_initialized_binding(&mut module);
         let entry = module.entry_function();
         ModuleBuilder::new(&mut module)
@@ -185,8 +188,8 @@ mod tests {
     }
 
     fn add_initialized_binding(
-        module: &mut ModuleIr,
-    ) -> (evrel_ir::BindingId, OperationId, OperationId) {
+        module: &mut JsModuleIr,
+    ) -> (evrel_js_ir::BindingId, OperationId, OperationId) {
         let entry = module.entry_function();
         let mut module_builder = ModuleBuilder::new(module);
         let binding = module_builder.create_binding(entry, "value", BindingKind::Const);

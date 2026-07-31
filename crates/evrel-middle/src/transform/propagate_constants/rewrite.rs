@@ -1,12 +1,12 @@
 //! Planning and application of constant replacements.
 
-use evrel_ir::{ConstantValue, FunctionEditor, FunctionIr, OperationId, OperationKind};
+use evrel_js_ir::{ConstantValue, FunctionEditor, JsFunctionIr, OperationId, OperationKind};
 
 use crate::analysis::{FunctionValueAnalysis, is_safe_to_remove};
 
 /// Collects replacements without mutating the analyzed function snapshot.
 pub(super) fn plan_constant_replacements(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     analysis: &FunctionValueAnalysis,
 ) -> Vec<(OperationId, ConstantValue)> {
     function
@@ -32,7 +32,7 @@ pub(super) fn plan_constant_replacements(
 
 /// Applies replacements planned against an immutable function snapshot.
 pub(super) fn rewrite_constants(
-    function: &mut FunctionIr,
+    function: &mut JsFunctionIr,
     replacements: Vec<(OperationId, ConstantValue)>,
 ) -> usize {
     let replaced = replacements.len();

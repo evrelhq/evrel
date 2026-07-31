@@ -1,6 +1,6 @@
 //! JavaScript object-expression lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     ObjectLiteralEntry, ObjectLiteralKey, ObjectLiteralOp, ObjectMethodKind, OperationKind, ValueId,
 };
 use oxc_ast::ast::{

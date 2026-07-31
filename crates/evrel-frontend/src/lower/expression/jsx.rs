@@ -1,6 +1,6 @@
 //! JSX expression lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     JsString, JsxAttribute as IrJsxAttribute, JsxAttributeName as IrJsxAttributeName,
     JsxAttributeValue as IrJsxAttributeValue, JsxChild as IrJsxChild,
     JsxElementName as IrJsxElementName, JsxElementOp, JsxFragmentOp,

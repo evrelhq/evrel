@@ -1,6 +1,6 @@
 //! Transfer semantics for JavaScript IR operations.
 
-use evrel_ir::{
+use evrel_js_ir::{
     BinaryOperator, ConstantValue, JsString, OperationKind, TypeofTarget, UnaryOperator,
 };
 
@@ -282,7 +282,7 @@ fn constant_typeof(value: &ConstantValue) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
+    use evrel_js_ir::{
         BinaryOp, BinaryOperator, ConstantOp, ConstantValue, IsNullishOp, OperationKind, TypeofOp,
         UnaryOp, UnaryOperator,
     };
@@ -320,7 +320,7 @@ mod tests {
         let result = evaluate_result(
             &OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             &[
-                AbstractValue::from_constant(ConstantValue::String(evrel_ir::JsString::new(
+                AbstractValue::from_constant(ConstantValue::String(evrel_js_ir::JsString::new(
                     "20", false,
                 ))),
                 AbstractValue::from_constant(ConstantValue::Number(22.0)),

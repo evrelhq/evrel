@@ -1,6 +1,6 @@
 //! JavaScript optional-chain lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     BlockId, BlockTarget, CallTarget, ConstantOp, ConstantValue, IfOp, IsNullishOp, JumpOp,
     LoadPropertyOp, OperationKind, PropertyKey, ValueId,
 };

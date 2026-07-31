@@ -1,6 +1,6 @@
 //! JavaScript template-literal lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     JsString, OperationKind, TaggedTemplateOp, TemplateLiteralOp, TemplateQuasi, ValueId,
 };
 use oxc_ast::ast::{TaggedTemplateExpression, TemplateLiteral};

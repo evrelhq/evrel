@@ -1,6 +1,6 @@
 //! Context-independent sparse conditional value analysis.
 
-use evrel_ir::{BlockId, BlockParameterSource, FunctionIr, OperationId, RegionId, ValueId};
+use evrel_js_ir::{BlockId, BlockParameterSource, JsFunctionIr, OperationId, RegionId, ValueId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::analysis::{RegionControlFlowError, RegionControlFlowGraph};
@@ -20,7 +20,7 @@ pub(super) struct SparseValueAnalysis {
 
 impl SparseValueAnalysis {
     pub(super) fn compute(
-        function: &FunctionIr,
+        function: &JsFunctionIr,
         inputs: &FunctionValueInputs,
     ) -> Result<Self, RegionControlFlowError> {
         Ok(SparseValueSolver::new(function, inputs)?.solve())
@@ -47,7 +47,7 @@ impl SparseValueAnalysis {
 }
 
 struct SparseValueSolver<'ir, 'inputs> {
-    function: &'ir FunctionIr,
+    function: &'ir JsFunctionIr,
     inputs: &'inputs FunctionValueInputs,
     control_flow: FxHashMap<RegionId, RegionControlFlowGraph>,
     values: FxHashMap<ValueId, AbstractValue>,
@@ -61,7 +61,7 @@ struct SparseValueSolver<'ir, 'inputs> {
 
 impl<'ir, 'inputs> SparseValueSolver<'ir, 'inputs> {
     fn new(
-        function: &'ir FunctionIr,
+        function: &'ir JsFunctionIr,
         inputs: &'inputs FunctionValueInputs,
     ) -> Result<Self, RegionControlFlowError> {
         let control_flow = function

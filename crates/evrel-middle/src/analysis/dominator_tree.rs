@@ -1,6 +1,6 @@
 //! Dominance analysis for one IR region.
 
-use evrel_ir::BlockId;
+use evrel_js_ir::BlockId;
 use rustc_hash::FxHashMap;
 
 use super::RegionControlFlowGraph;
@@ -168,8 +168,8 @@ fn intersect(
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BlockTarget, ConstantOp, ConstantValue, IfOp, JumpOp, ModuleBuilder, ModuleIr,
+    use evrel_js_ir::{
+        BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, JumpOp, ModuleBuilder,
         OperationKind, UnwindTarget,
     };
 
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn computes_dominators_for_linear_control_flow() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (entry, middle, exit) = {
@@ -189,14 +189,14 @@ mod tests {
             let exit = builder.create_block();
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(middle, 0))),
                 [],
                 UnwindTarget::Propagate,
             );
             builder.switch_to_block(middle);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(exit, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn computes_dominators_for_a_diamond() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (entry, left, right, join) = {
@@ -231,14 +231,14 @@ mod tests {
             let join = builder.create_block();
 
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -250,7 +250,7 @@ mod tests {
 
             builder.switch_to_block(left);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -258,7 +258,7 @@ mod tests {
 
             builder.switch_to_block(right);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -281,7 +281,7 @@ mod tests {
 
     #[test]
     fn computes_dominators_for_a_loop_backedge() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (entry, header, body, exit) = {
@@ -293,7 +293,7 @@ mod tests {
             let exit = builder.create_block();
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -301,14 +301,14 @@ mod tests {
 
             builder.switch_to_block(header);
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(body, 0),
                     BlockTarget::new(exit, 0),
@@ -320,7 +320,7 @@ mod tests {
 
             builder.switch_to_block(body);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn excludes_unreachable_blocks() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (entry, exit, unreachable) = {
@@ -354,7 +354,7 @@ mod tests {
             let unreachable = builder.create_block();
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(exit, 0))),
                 [],
                 UnwindTarget::Propagate,

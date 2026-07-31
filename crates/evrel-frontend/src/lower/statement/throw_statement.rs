@@ -1,6 +1,6 @@
 //! JavaScript `throw` statement lowering.
 
-use evrel_ir::{OperationKind, ThrowOp};
+use evrel_js_ir::{OperationKind, ThrowOp};
 use oxc_ast::ast::ThrowStatement;
 
 use crate::{

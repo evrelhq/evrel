@@ -1,6 +1,6 @@
 //! JavaScript literal expression lowering.
 
-use evrel_ir::{ConstantOp, ConstantValue, JsString, OperationKind, RegExpLiteralOp, ValueId};
+use evrel_js_ir::{ConstantOp, ConstantValue, JsString, OperationKind, RegExpLiteralOp, ValueId};
 use oxc_ast::ast::{
     BigIntLiteral, BooleanLiteral, NullLiteral, NumericLiteral, RegExpLiteral, StringLiteral,
 };

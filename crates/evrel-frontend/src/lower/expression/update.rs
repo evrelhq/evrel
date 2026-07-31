@@ -1,6 +1,6 @@
 //! JavaScript update-expression lowering.
 
-use evrel_ir::{OperationKind, UpdateOp, UpdateOperator, ValueId};
+use evrel_js_ir::{OperationKind, UpdateOp, UpdateOperator, ValueId};
 use oxc_ast::ast::UpdateExpression;
 use oxc_syntax::operator::UpdateOperator as OxcUpdateOperator;
 

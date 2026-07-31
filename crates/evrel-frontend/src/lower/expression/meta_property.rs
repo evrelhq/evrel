@@ -1,6 +1,6 @@
 //! JavaScript meta-property lowering.
 
-use evrel_ir::{MetaPropertyKind, MetaPropertyOp, OperationKind, ValueId};
+use evrel_js_ir::{MetaPropertyKind, MetaPropertyOp, OperationKind, ValueId};
 use oxc_ast::ast::MetaProperty;
 
 use crate::lower::FunctionLowerer;

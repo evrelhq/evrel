@@ -1,6 +1,6 @@
 //! Shared `for...in` and `for...of` left-side lowering.
 
-use evrel_ir::{BindingId, BindingWriteMode, ValueId};
+use evrel_js_ir::{BindingId, BindingWriteMode, ValueId};
 use oxc_ast::ast::{ForStatementLeft, VariableDeclarationKind};
 
 use crate::{

@@ -26,7 +26,7 @@
     "known_reference": { "status": "xfail", "paths": ["tests/fixtures/runtime/known-failures/comma-call-reference.mjs", "tests/fixtures/runtime/known-failures/sequence-indirect-eval.mjs"] },
     "known_scripts": { "status": "xfail", "paths": ["tests/fixtures/runtime/known-failures/delete-implicit-global.js", "tests/fixtures/runtime/known-failures/delete-binding.js", "tests/fixtures/runtime/known-failures/delete-unresolvable.js"] },
     "known_source_reflection": { "status": "xfail", "paths": ["tests/fixtures/runtime/known-failures/function-source-reflection.mjs", "tests/fixtures/runtime/known-failures/function-source-class-key.mjs"] },
-    "ir_structure": { "status": "compiler_unit", "paths": ["../evrel-ir/src"] },
+    "ir_structure": { "status": "compiler_unit", "paths": ["../evrel-js-ir/src"] },
     "jsx": { "status": "compiler_unit", "paths": ["tests/public_api.rs", "../evrel-frontend/src/lower/expression/jsx.rs", "../evrel-codegen-js/src/emit/jsx.rs"] },
     "typescript_erasure": { "status": "compiler_unit", "paths": ["tests/public_api.rs", "../evrel-frontend/src/lib.rs"] },
     "test262": { "status": "test262", "paths": ["../../tests/test262"] },

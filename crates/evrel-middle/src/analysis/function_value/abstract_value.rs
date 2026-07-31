@@ -1,7 +1,7 @@
 //! Abstract domain for ECMAScript values.
 
 use bitflags::bitflags;
-use evrel_ir::ConstantValue;
+use evrel_js_ir::ConstantValue;
 
 bitflags! {
     /// Possible ECMAScript language types represented by an abstract value.
@@ -191,7 +191,7 @@ fn same_constant(left: &ConstantValue, right: &ConstantValue) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::ConstantValue;
+    use evrel_js_ir::ConstantValue;
 
     use super::{AbstractValue, ValueTypeSet};
 

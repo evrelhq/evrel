@@ -1,24 +1,24 @@
 //! Recursive ECMAScript export resolution.
 
-use evrel_ir::{
-    ModuleAttribute, ModuleDependency, ModuleExport, ModuleId, ModuleImport, ModuleRequestKind,
-    ModuleTarget, ProgramBindingId, ProgramIr,
+use evrel_js_ir::{
+    JsProgramIr, ModuleAttribute, ModuleDependency, ModuleExport, ModuleId, ModuleImport,
+    ModuleRequestKind, ModuleTarget, ProgramBindingId,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::ImportedBindingTarget;
 
-pub(super) fn resolve(program: &ProgramIr) -> FxHashMap<ProgramBindingId, ImportedBindingTarget> {
+pub(super) fn resolve(program: &JsProgramIr) -> FxHashMap<ProgramBindingId, ImportedBindingTarget> {
     Resolver::new(program).resolve_imports()
 }
 
 struct Resolver<'program> {
-    program: &'program ProgramIr,
+    program: &'program JsProgramIr,
     dependencies: DependencyIndex<'program>,
 }
 
 impl<'program> Resolver<'program> {
-    fn new(program: &'program ProgramIr) -> Self {
+    fn new(program: &'program JsProgramIr) -> Self {
         Self {
             program,
             dependencies: DependencyIndex::new(program),
@@ -222,7 +222,7 @@ struct DependencyIndex<'program> {
 }
 
 impl<'program> DependencyIndex<'program> {
-    fn new(program: &'program ProgramIr) -> Self {
+    fn new(program: &'program JsProgramIr) -> Self {
         let mut by_importer = FxHashMap::default();
 
         for dependency in program.dependencies() {

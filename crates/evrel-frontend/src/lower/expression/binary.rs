@@ -1,6 +1,6 @@
 //! JavaScript binary expression lowering.
 
-use evrel_ir::{BinaryOp, BinaryOperator, HasPrivateNameOp, OperationKind, ValueId};
+use evrel_js_ir::{BinaryOp, BinaryOperator, HasPrivateNameOp, OperationKind, ValueId};
 use oxc_ast::ast::{BinaryExpression, PrivateInExpression};
 use oxc_syntax::operator::BinaryOperator as OxcBinaryOperator;
 

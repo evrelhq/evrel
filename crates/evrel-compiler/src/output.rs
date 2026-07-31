@@ -1,6 +1,6 @@
 //! Results returned by compiler entrypoints.
 
-use evrel_ir::ModuleKey;
+use evrel_js_ir::ModuleKey;
 
 /// Successfully compiled JavaScript output.
 #[derive(Debug, Clone, PartialEq, Eq)]

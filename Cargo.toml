@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/evrel-ir",
+    "crates/evrel-js-ir",
     "crates/evrel-frontend",
     "crates/evrel-codegen-js",
     "crates/evrel-compiler",

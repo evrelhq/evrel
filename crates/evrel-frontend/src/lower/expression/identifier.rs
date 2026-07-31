@@ -1,6 +1,6 @@
 //! JavaScript identifier lowering.
 
-use evrel_ir::{LoadArgumentsOp, LoadBindingOp, LoadGlobalOp, OperationKind, ValueId};
+use evrel_js_ir::{LoadArgumentsOp, LoadBindingOp, LoadGlobalOp, OperationKind, ValueId};
 use oxc_ast::ast::IdentifierReference;
 
 use crate::{FrontendError, lower::FunctionLowerer};

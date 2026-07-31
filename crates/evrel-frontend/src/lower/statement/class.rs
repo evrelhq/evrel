@@ -1,6 +1,6 @@
 //! JavaScript class-declaration lowering.
 
-use evrel_ir::{BindingId, InitializeBindingOp, OperationKind};
+use evrel_js_ir::{BindingId, InitializeBindingOp, OperationKind};
 use oxc_ast::ast::Class;
 
 use crate::{

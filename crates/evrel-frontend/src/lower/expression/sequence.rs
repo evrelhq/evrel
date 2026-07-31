@@ -1,6 +1,6 @@
 //! JavaScript sequence-expression lowering.
 
-use evrel_ir::ValueId;
+use evrel_js_ir::ValueId;
 use oxc_ast::ast::SequenceExpression;
 
 use crate::{FrontendError, lower::FunctionLowerer};

@@ -1,6 +1,6 @@
 //! JavaScript function-definition lowering.
 
-use evrel_ir::{FunctionId, FunctionKind, FunctionMode};
+use evrel_js_ir::{FunctionId, FunctionKind, FunctionMode};
 use oxc_ast::ast::{Function, FunctionType};
 use oxc_span::GetSpan;
 

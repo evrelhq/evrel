@@ -1,6 +1,6 @@
 //! External facts supplied to a function-value analysis.
 
-use evrel_ir::ValueId;
+use evrel_js_ir::ValueId;
 use rustc_hash::FxHashMap;
 
 use super::AbstractValue;
@@ -54,8 +54,8 @@ impl FunctionValueInputs {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        ConstantOp, ConstantValue, ModuleBuilder, ModuleIr, OperationKind, UnwindTarget,
+    use evrel_js_ir::{
+        ConstantOp, ConstantValue, JsModuleIr, ModuleBuilder, OperationKind, UnwindTarget,
     };
 
     use super::FunctionValueInputs;
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn stores_boundary_and_result_facts_separately() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (boundary, result) = {
@@ -71,13 +71,13 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let boundary = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let result = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,

@@ -1,6 +1,6 @@
 //! JavaScript member-expression lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     LoadPropertyOp, LoadSuperPropertyOp, OperationKind, PropertyKey, SuperPropertyKey, ValueId,
 };
 use oxc_ast::ast::{

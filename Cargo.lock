@@ -212,7 +212,7 @@ name = "evrel-codegen-js"
 version = "0.1.0"
 dependencies = [
  "evrel-frontend",
- "evrel-ir",
+ "evrel-js-ir",
  "oxc_allocator",
  "oxc_ast",
  "oxc_codegen",
@@ -229,7 +229,7 @@ version = "0.1.0"
 dependencies = [
  "evrel-codegen-js",
  "evrel-frontend",
- "evrel-ir",
+ "evrel-js-ir",
  "evrel-middle",
  "serde_json",
  "tempfile",
@@ -241,7 +241,7 @@ dependencies = [
 name = "evrel-frontend"
 version = "0.1.0"
 dependencies = [
- "evrel-ir",
+ "evrel-js-ir",
  "oxc_allocator",
  "oxc_ast",
  "oxc_ast_visit",
@@ -255,7 +255,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "evrel-ir"
+name = "evrel-js-ir"
 version = "0.1.0"
 dependencies = [
  "bitflags",
@@ -266,7 +266,7 @@ dependencies = [
 name = "evrel-middle"
 version = "0.1.0"
 dependencies = [
- "evrel-ir",
+ "evrel-js-ir",
  "rustc-hash",
 ]
 

@@ -1,6 +1,6 @@
 //! Host-provided inputs for whole-program compilation.
 
-use evrel_ir::{ModuleKey, ModuleRequest};
+use evrel_js_ir::{ModuleKey, ModuleRequest};
 
 /// A complete source program submitted for compilation.
 ///

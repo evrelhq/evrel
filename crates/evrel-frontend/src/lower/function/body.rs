@@ -1,7 +1,7 @@
 //! JavaScript function-body lowering.
 
-use evrel_ir::FunctionProperties;
-use evrel_ir::{ConstantOp, ConstantValue, OperationKind, ReturnOp};
+use evrel_js_ir::FunctionProperties;
+use evrel_js_ir::{ConstantOp, ConstantValue, OperationKind, ReturnOp};
 use oxc_ast::ast::{FunctionBody, Statement};
 
 use crate::{FrontendError, lower::FunctionLowerer};

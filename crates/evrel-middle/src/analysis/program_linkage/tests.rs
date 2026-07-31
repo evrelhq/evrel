@@ -1,7 +1,7 @@
-use evrel_ir::{
-    BindingId, BindingKind, LocationId, ModuleBuilder, ModuleDependency, ModuleExport,
-    ModuleExportName, ModuleImport, ModuleIr, ModuleKey, ModuleRequest, ModuleRequestKind,
-    ModuleTarget, ProgramBindingId, ProgramIr,
+use evrel_js_ir::{
+    BindingId, BindingKind, JsModuleIr, JsProgramIr, LocationId, ModuleBuilder, ModuleDependency,
+    ModuleExport, ModuleExportName, ModuleImport, ModuleKey, ModuleRequest, ModuleRequestKind,
+    ModuleTarget, ProgramBindingId,
 };
 
 use super::{ImportedBindingTarget, ProgramLinkage};
@@ -10,7 +10,7 @@ use super::{ImportedBindingTarget, ProgramLinkage};
 fn resolves_transitive_indirect_and_star_exports() {
     let (source, source_binding) = module_with_local_export("value");
 
-    let mut relay = ModuleIr::new();
+    let mut relay = JsModuleIr::new();
     ModuleBuilder::new(&mut relay).add_export(ModuleExport::indirect(
         LocationId::UNKNOWN,
         "./source.js",
@@ -19,17 +19,17 @@ fn resolves_transitive_indirect_and_star_exports() {
         name("renamed"),
     ));
 
-    let mut barrel = ModuleIr::new();
+    let mut barrel = JsModuleIr::new();
     ModuleBuilder::new(&mut barrel).add_export(ModuleExport::star(
         LocationId::UNKNOWN,
         "./relay.js",
         [],
     ));
 
-    let mut consumer = ModuleIr::new();
+    let mut consumer = JsModuleIr::new();
     let imported = add_named_import(&mut consumer, "./barrel.js", "renamed");
 
-    let mut program = ProgramIr::new();
+    let mut program = JsProgramIr::new();
     let source_id = program.add_module(ModuleKey::new("source"), source);
     let relay_id = program.add_module(ModuleKey::new("relay"), relay);
     let barrel_id = program.add_module(ModuleKey::new("barrel"), barrel);
@@ -70,7 +70,7 @@ fn resolves_transitive_indirect_and_star_exports() {
 
 #[test]
 fn resolves_exports_through_a_star_cycle() {
-    let mut first = ModuleIr::new();
+    let mut first = JsModuleIr::new();
     ModuleBuilder::new(&mut first).add_export(ModuleExport::star(
         LocationId::UNKNOWN,
         "./second.js",
@@ -84,10 +84,10 @@ fn resolves_exports_through_a_star_cycle() {
         [],
     ));
 
-    let mut consumer = ModuleIr::new();
+    let mut consumer = JsModuleIr::new();
     let imported = add_named_import(&mut consumer, "./first.js", "value");
 
-    let mut program = ProgramIr::new();
+    let mut program = JsProgramIr::new();
     let first_id = program.add_module(ModuleKey::new("first"), first);
     let second_id = program.add_module(ModuleKey::new("second"), second);
     let consumer_id = program.add_module(ModuleKey::new("consumer"), consumer);
@@ -127,9 +127,9 @@ fn resolves_exports_through_a_star_cycle() {
 
 #[test]
 fn resolves_namespace_reexports() {
-    let source = ModuleIr::new();
+    let source = JsModuleIr::new();
 
-    let mut relay = ModuleIr::new();
+    let mut relay = JsModuleIr::new();
     ModuleBuilder::new(&mut relay).add_export(ModuleExport::namespace(
         LocationId::UNKNOWN,
         "./source.js",
@@ -137,10 +137,10 @@ fn resolves_namespace_reexports() {
         name("namespace"),
     ));
 
-    let mut consumer = ModuleIr::new();
+    let mut consumer = JsModuleIr::new();
     let imported = add_named_import(&mut consumer, "./relay.js", "namespace");
 
-    let mut program = ProgramIr::new();
+    let mut program = JsProgramIr::new();
     let source_id = program.add_module(ModuleKey::new("source"), source);
     let relay_id = program.add_module(ModuleKey::new("relay"), relay);
     let consumer_id = program.add_module(ModuleKey::new("consumer"), consumer);
@@ -175,15 +175,15 @@ fn rejects_ambiguous_star_exports() {
     let (left, _) = module_with_local_export("value");
     let (right, _) = module_with_local_export("value");
 
-    let mut barrel = ModuleIr::new();
+    let mut barrel = JsModuleIr::new();
     let mut builder = ModuleBuilder::new(&mut barrel);
     builder.add_export(ModuleExport::star(LocationId::UNKNOWN, "./left.js", []));
     builder.add_export(ModuleExport::star(LocationId::UNKNOWN, "./right.js", []));
 
-    let mut consumer = ModuleIr::new();
+    let mut consumer = JsModuleIr::new();
     let imported = add_named_import(&mut consumer, "./barrel.js", "value");
 
-    let mut program = ProgramIr::new();
+    let mut program = JsProgramIr::new();
     let left_id = program.add_module(ModuleKey::new("left"), left);
     let right_id = program.add_module(ModuleKey::new("right"), right);
     let barrel_id = program.add_module(ModuleKey::new("barrel"), barrel);
@@ -223,17 +223,17 @@ fn rejects_ambiguous_star_exports() {
 fn does_not_resolve_default_through_star_exports() {
     let (source, _) = module_with_local_export("default");
 
-    let mut barrel = ModuleIr::new();
+    let mut barrel = JsModuleIr::new();
     ModuleBuilder::new(&mut barrel).add_export(ModuleExport::star(
         LocationId::UNKNOWN,
         "./source.js",
         [],
     ));
 
-    let mut consumer = ModuleIr::new();
+    let mut consumer = JsModuleIr::new();
     let imported = add_default_import(&mut consumer, "./barrel.js");
 
-    let mut program = ProgramIr::new();
+    let mut program = JsProgramIr::new();
     let source_id = program.add_module(ModuleKey::new("source"), source);
     let barrel_id = program.add_module(ModuleKey::new("barrel"), barrel);
     let consumer_id = program.add_module(ModuleKey::new("consumer"), consumer);
@@ -263,12 +263,12 @@ fn does_not_resolve_default_through_star_exports() {
 
 #[test]
 fn preserves_uninspectable_exports_and_missing_linkage() {
-    let mut consumer = ModuleIr::new();
+    let mut consumer = JsModuleIr::new();
     let opaque = add_named_import(&mut consumer, "opaque", "value");
     let external = add_default_import(&mut consumer, "external");
     let missing = add_named_import(&mut consumer, "missing", "value");
 
-    let mut program = ProgramIr::new();
+    let mut program = JsProgramIr::new();
     let consumer_id = program.add_module(ModuleKey::new("consumer"), consumer);
     program.add_dependency(ModuleDependency::new(
         consumer_id,
@@ -303,8 +303,8 @@ fn preserves_uninspectable_exports_and_missing_linkage() {
     );
 }
 
-fn module_with_local_export(exported: &str) -> (ModuleIr, BindingId) {
-    let mut module = ModuleIr::new();
+fn module_with_local_export(exported: &str) -> (JsModuleIr, BindingId) {
+    let mut module = JsModuleIr::new();
     let entry = module.entry_function();
     let mut builder = ModuleBuilder::new(&mut module);
     let binding = builder.create_binding(entry, exported, BindingKind::Const);
@@ -317,7 +317,7 @@ fn module_with_local_export(exported: &str) -> (ModuleIr, BindingId) {
     (module, binding)
 }
 
-fn add_named_import(module: &mut ModuleIr, source: &str, imported: &str) -> BindingId {
+fn add_named_import(module: &mut JsModuleIr, source: &str, imported: &str) -> BindingId {
     let entry = module.entry_function();
     let mut builder = ModuleBuilder::new(module);
     let binding = builder.create_binding(entry, imported, BindingKind::Import);
@@ -332,7 +332,7 @@ fn add_named_import(module: &mut ModuleIr, source: &str, imported: &str) -> Bind
     binding
 }
 
-fn add_default_import(module: &mut ModuleIr, source: &str) -> BindingId {
+fn add_default_import(module: &mut JsModuleIr, source: &str) -> BindingId {
     let entry = module.entry_function();
     let mut builder = ModuleBuilder::new(module);
     let binding = builder.create_binding(entry, "default", BindingKind::Import);
@@ -347,11 +347,11 @@ fn add_default_import(module: &mut ModuleIr, source: &str) -> BindingId {
 }
 
 fn add_internal_dependency(
-    program: &mut ProgramIr,
-    importer: evrel_ir::ModuleId,
+    program: &mut JsProgramIr,
+    importer: evrel_js_ir::ModuleId,
     kind: ModuleRequestKind,
     specifier: &str,
-    target: evrel_ir::ModuleId,
+    target: evrel_js_ir::ModuleId,
 ) {
     program.add_dependency(ModuleDependency::new(
         importer,

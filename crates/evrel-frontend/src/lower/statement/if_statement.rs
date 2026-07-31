@@ -1,6 +1,6 @@
 //! JavaScript `if` statement lowering.
 
-use evrel_ir::{BlockTarget, IfOp, JumpOp, OperationKind};
+use evrel_js_ir::{BlockTarget, IfOp, JumpOp, OperationKind};
 use oxc_ast::ast::IfStatement;
 
 use crate::{

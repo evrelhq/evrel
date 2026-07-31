@@ -1,6 +1,6 @@
 //! JavaScript new-expression lowering.
 
-use evrel_ir::{ConstructOp, OperationKind, ValueId};
+use evrel_js_ir::{ConstructOp, OperationKind, ValueId};
 use oxc_ast::ast::NewExpression;
 
 use crate::{FrontendError, lower::FunctionLowerer};

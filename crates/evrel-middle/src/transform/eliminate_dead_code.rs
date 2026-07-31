@@ -1,6 +1,6 @@
 //! Worklist elimination of unused, unobservable operations.
 
-use evrel_ir::{FunctionEditor, FunctionIr, OperationId, ValueDefinition};
+use evrel_js_ir::{FunctionEditor, JsFunctionIr, OperationId, ValueDefinition};
 use rustc_hash::FxHashSet;
 
 use crate::analysis::{FunctionValueAnalysis, is_safe_to_remove};
@@ -9,7 +9,7 @@ use crate::work_queue::WorkQueue;
 /// Removes unused operations whose evaluation is proven unobservable.
 ///
 /// Returns zero when the function's value flow cannot be modeled soundly.
-pub fn eliminate_dead_code(function: &mut FunctionIr) -> usize {
+pub fn eliminate_dead_code(function: &mut JsFunctionIr) -> usize {
     let removals = {
         let Ok(values) = FunctionValueAnalysis::compute(function) else {
             return 0;
@@ -23,7 +23,10 @@ pub fn eliminate_dead_code(function: &mut FunctionIr) -> usize {
     removed
 }
 
-fn plan_dead_operations(function: &FunctionIr, values: &FunctionValueAnalysis) -> Vec<OperationId> {
+fn plan_dead_operations(
+    function: &JsFunctionIr,
+    values: &FunctionValueAnalysis,
+) -> Vec<OperationId> {
     let mut work = WorkQueue::new();
 
     for (operation, _) in function.operations() {
@@ -66,7 +69,7 @@ fn plan_dead_operations(function: &FunctionIr, values: &FunctionValueAnalysis) -
 }
 
 fn is_dead(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     values: &FunctionValueAnalysis,
     operation: OperationId,
     planned: &FxHashSet<OperationId>,
@@ -94,16 +97,16 @@ fn is_dead(
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BinaryOp, BinaryOperator, ConstantOp, ConstantValue, DebuggerOp, LoadGlobalOp,
-        ModuleBuilder, ModuleIr, OperationKind, ReturnOp, UnwindTarget, ValueId,
+    use evrel_js_ir::{
+        BinaryOp, BinaryOperator, ConstantOp, ConstantValue, DebuggerOp, JsModuleIr, LoadGlobalOp,
+        ModuleBuilder, OperationKind, ReturnOp, UnwindTarget, ValueId,
     };
 
     use super::eliminate_dead_code;
 
     #[test]
     fn removes_dead_producer_chains_to_a_fixed_point() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (left, right, addition) = {
@@ -116,7 +119,7 @@ mod tests {
             let right_value = builder.operation_results(right)[0];
 
             let addition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left_value, right_value],
                 UnwindTarget::Propagate,
@@ -124,7 +127,7 @@ mod tests {
 
             let returned = append_undefined(&mut builder);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
                 UnwindTarget::Propagate,
@@ -151,7 +154,7 @@ mod tests {
 
     #[test]
     fn preserves_observable_operations() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let debugger = {
@@ -159,7 +162,7 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let debugger = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Debugger(DebuggerOp::new()),
                 [],
                 UnwindTarget::Propagate,
@@ -167,7 +170,7 @@ mod tests {
 
             let returned = append_undefined(&mut builder);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
                 UnwindTarget::Propagate,
@@ -191,7 +194,7 @@ mod tests {
 
     #[test]
     fn preserves_an_unused_operation_that_may_throw() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let addition = {
@@ -199,7 +202,7 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
 
             let left = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
                 [],
                 UnwindTarget::Propagate,
@@ -208,7 +211,7 @@ mod tests {
             let right = append_number(&mut builder, 1.0);
 
             let addition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
                 UnwindTarget::Propagate,
@@ -216,7 +219,7 @@ mod tests {
 
             let returned = append_undefined(&mut builder);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
                 UnwindTarget::Propagate,
@@ -239,26 +242,26 @@ mod tests {
     }
 
     fn append_number_operation(
-        builder: &mut evrel_ir::FunctionBuilder<'_>,
+        builder: &mut evrel_js_ir::FunctionBuilder<'_>,
         value: f64,
-    ) -> evrel_ir::OperationId {
+    ) -> evrel_js_ir::OperationId {
         builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,
         )
     }
 
-    fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
+    fn append_number(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: f64) -> ValueId {
         let operation = append_number_operation(builder, value);
 
         builder.operation_results(operation)[0]
     }
 
-    fn append_undefined(builder: &mut evrel_ir::FunctionBuilder<'_>) -> ValueId {
+    fn append_undefined(builder: &mut evrel_js_ir::FunctionBuilder<'_>) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
             UnwindTarget::Propagate,

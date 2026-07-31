@@ -1,6 +1,6 @@
 //! JavaScript yield-expression lowering.
 
-use evrel_ir::{ConstantOp, ConstantValue, OperationKind, ValueId, YieldKind, YieldOp};
+use evrel_js_ir::{ConstantOp, ConstantValue, OperationKind, ValueId, YieldKind, YieldOp};
 use oxc_ast::ast::YieldExpression;
 
 use crate::{FrontendError, lower::FunctionLowerer};

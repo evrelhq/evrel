@@ -1,6 +1,6 @@
 //! Oxc binding-pattern conversion.
 
-use evrel_ir::{
+use evrel_js_ir::{
     AssignmentPattern as IrAssignmentPattern, AssignmentTarget as IrAssignmentTarget, BindingKind,
     BindingPattern as IrBindingPattern, BindingWriteMode, DestructureAssignmentOp,
     DestructureBindingOp, InitializeBindingOp, ObjectAssignmentProperty, ObjectBindingProperty,

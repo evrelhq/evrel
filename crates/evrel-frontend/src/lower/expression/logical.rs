@@ -1,6 +1,6 @@
 //! JavaScript logical-expression lowering.
 
-use evrel_ir::{BlockTarget, IfOp, IsNullishOp, JumpOp, OperationKind, ValueId};
+use evrel_js_ir::{BlockTarget, IfOp, IsNullishOp, JumpOp, OperationKind, ValueId};
 use oxc_ast::ast::LogicalExpression;
 use oxc_syntax::operator::LogicalOperator;
 

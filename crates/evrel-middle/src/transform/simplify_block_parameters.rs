@@ -1,7 +1,7 @@
 //! Elimination of trivial forwarded SSA block parameters.
 
-use evrel_ir::{
-    BlockId, BlockParameterSource, FunctionEditor, FunctionIr, ValueDefinition, ValueId,
+use evrel_js_ir::{
+    BlockId, BlockParameterSource, FunctionEditor, JsFunctionIr, ValueDefinition, ValueId,
 };
 
 use crate::analysis::{RegionControlFlowError, RegionControlFlowGraph};
@@ -20,7 +20,7 @@ struct Simplification {
 ///
 /// Returns zero when the function's ordinary regional control flow cannot be
 /// modeled soundly.
-pub fn simplify_block_parameters(function: &mut FunctionIr) -> usize {
+pub fn simplify_block_parameters(function: &mut JsFunctionIr) -> usize {
     let graphs = function
         .regions()
         .map(|(region, _)| RegionControlFlowGraph::compute(function, region))
@@ -87,7 +87,7 @@ pub fn simplify_block_parameters(function: &mut FunctionIr) -> usize {
 }
 
 fn find_simplification(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     graph: &RegionControlFlowGraph,
     block: BlockId,
 ) -> Option<Simplification> {
@@ -170,7 +170,7 @@ fn find_simplification(
     None
 }
 
-fn successor_argument_targets(function: &FunctionIr, value: ValueId) -> Vec<BlockId> {
+fn successor_argument_targets(function: &JsFunctionIr, value: ValueId) -> Vec<BlockId> {
     let value = function
         .value(value)
         .expect("simplified parameter must remain live");
@@ -193,7 +193,7 @@ fn successor_argument_targets(function: &FunctionIr, value: ValueId) -> Vec<Bloc
 }
 
 fn incoming_argument_parameter_blocks(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     graph: &RegionControlFlowGraph,
     block: BlockId,
     forwarded_index: usize,
@@ -225,9 +225,9 @@ fn incoming_argument_parameter_blocks(
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
+    use evrel_js_ir::{
         BinaryOp, BinaryOperator, BlockParameterSource, BlockTarget, ConstantOp, ConstantValue,
-        FunctionBuilder, IfOp, JumpOp, ModuleBuilder, ModuleIr, OperationKind, ReturnOp,
+        FunctionBuilder, IfOp, JsModuleIr, JumpOp, ModuleBuilder, OperationKind, ReturnOp,
         UnwindTarget, ValueDefinition, ValueId,
     };
 
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn replaces_a_parameter_when_every_input_matches() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (join, parameter, condition, value, branch, returned) = {
@@ -246,7 +246,7 @@ mod tests {
             let condition = append_boolean(&mut builder, true);
             let value = append_number(&mut builder, 1.0);
             let branch = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(join, 1),
                     BlockTarget::new(join, 1),
@@ -258,7 +258,7 @@ mod tests {
 
             builder.switch_to_block(join);
             let returned = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn continues_after_a_parameter_with_distinct_inputs() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (join, distinct, matching, left, right, matching_value, branch, comparison) = {
@@ -307,7 +307,7 @@ mod tests {
             let right = append_number(&mut builder, 2.0);
             let matching_value = append_number(&mut builder, 3.0);
             let branch = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(join, 2),
                     BlockTarget::new(join, 2),
@@ -319,14 +319,14 @@ mod tests {
 
             builder.switch_to_block(join);
             let comparison = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::StrictEqual)),
                 [distinct, matching],
                 UnwindTarget::Propagate,
             );
             let comparison_result = builder.operation_results(comparison)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [comparison_result],
                 UnwindTarget::Propagate,
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn removes_an_unused_parameter_even_when_inputs_differ() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (join, parameter, branch) = {
@@ -386,7 +386,7 @@ mod tests {
             let left = append_number(&mut builder, 1.0);
             let right = append_number(&mut builder, 2.0);
             let branch = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(join, 1),
                     BlockTarget::new(join, 1),
@@ -399,7 +399,7 @@ mod tests {
             builder.switch_to_block(join);
             let undefined = append_undefined(&mut builder);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [undefined],
                 UnwindTarget::Propagate,
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn ignores_a_self_referential_loop_backedge() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (header, parameter, initial, entry_jump, backedge, returned) = {
@@ -435,7 +435,7 @@ mod tests {
             let parameter = builder.append_block_parameter(header, BlockParameterSource::Forwarded);
             let initial = append_number(&mut builder, 1.0);
             let entry_jump = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
                 [initial],
                 UnwindTarget::Propagate,
@@ -444,7 +444,7 @@ mod tests {
             builder.switch_to_block(header);
             let condition = append_boolean(&mut builder, true);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(body, 0),
                     BlockTarget::new(exit, 0),
@@ -456,7 +456,7 @@ mod tests {
 
             builder.switch_to_block(body);
             let backedge = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -464,7 +464,7 @@ mod tests {
 
             builder.switch_to_block(exit);
             let returned = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
                 UnwindTarget::Propagate,
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn removes_transitively_unused_parameters_to_a_fixed_point() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let (forwarding, forwarded, completion, result, entry_jump, forwarding_jump) = {
@@ -509,7 +509,7 @@ mod tests {
                 builder.append_block_parameter(completion, BlockParameterSource::Forwarded);
             let initial = append_number(&mut builder, 1.0);
             let entry_jump = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                 [initial],
                 UnwindTarget::Propagate,
@@ -517,7 +517,7 @@ mod tests {
 
             builder.switch_to_block(forwarding);
             let forwarding_jump = builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(completion, 1))),
                 [forwarded],
                 UnwindTarget::Propagate,
@@ -526,7 +526,7 @@ mod tests {
             builder.switch_to_block(completion);
             let undefined = append_undefined(&mut builder);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [undefined],
                 UnwindTarget::Propagate,
@@ -587,7 +587,7 @@ mod tests {
 
     fn append_constant(builder: &mut FunctionBuilder<'_>, value: ConstantValue) -> ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(value)),
             [],
             UnwindTarget::Propagate,

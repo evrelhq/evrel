@@ -1,6 +1,6 @@
 //! JavaScript dynamic-import lowering.
 
-use evrel_ir::{DynamicImportOp, DynamicImportPhase, OperationKind, ValueId};
+use evrel_js_ir::{DynamicImportOp, DynamicImportPhase, OperationKind, ValueId};
 use oxc_ast::ast::{ImportExpression, ImportPhase};
 
 use crate::{FrontendError, lower::FunctionLowerer};

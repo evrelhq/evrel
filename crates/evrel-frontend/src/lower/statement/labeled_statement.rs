@@ -1,6 +1,6 @@
 //! JavaScript labeled-statement lowering.
 
-use evrel_ir::{BlockTarget, JumpOp, LabeledStatementData, OperationKind};
+use evrel_js_ir::{BlockTarget, JumpOp, LabeledStatementData, OperationKind};
 use oxc_ast::ast::{LabeledStatement, Statement};
 
 use crate::{FrontendError, lower::FunctionLowerer};

@@ -1,6 +1,6 @@
 //! JavaScript unary-expression lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     DeleteOp, DeleteTarget, OperationKind, PropertyKey, TypeofOp, UnaryOp, UnaryOperator, ValueId,
 };
 use oxc_ast::ast::{Expression, UnaryExpression};

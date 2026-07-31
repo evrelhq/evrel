@@ -3,12 +3,12 @@
 use std::collections::BTreeSet;
 
 use evrel_frontend::lower_source_file;
-use evrel_ir::{ModuleDependency, ModuleTarget, ProgramIr};
+use evrel_js_ir::{JsProgramIr, ModuleDependency, ModuleTarget};
 
 use crate::{CompilerError, ProgramInput, ResolvedModuleTarget};
 
 /// Builds compiler-owned IR from a complete host-resolved program.
-pub(crate) fn build_program_ir(input: &ProgramInput) -> Result<ProgramIr, CompilerError> {
+pub(crate) fn build_program_ir(input: &ProgramInput) -> Result<JsProgramIr, CompilerError> {
     validate_program_input(input)?;
 
     let mut program = lower_modules(input)?;
@@ -57,8 +57,8 @@ fn validate_program_input(input: &ProgramInput) -> Result<(), CompilerError> {
     Ok(())
 }
 
-fn lower_modules(input: &ProgramInput) -> Result<ProgramIr, CompilerError> {
-    let mut program = ProgramIr::new();
+fn lower_modules(input: &ProgramInput) -> Result<JsProgramIr, CompilerError> {
+    let mut program = JsProgramIr::new();
 
     for module in input.modules() {
         let ir =
@@ -75,7 +75,7 @@ fn lower_modules(input: &ProgramInput) -> Result<ProgramIr, CompilerError> {
     Ok(program)
 }
 
-fn link_dependencies(input: &ProgramInput, program: &mut ProgramIr) {
+fn link_dependencies(input: &ProgramInput, program: &mut JsProgramIr) {
     for module in input.modules() {
         let importer = program
             .module_by_key(module.key())
@@ -101,7 +101,7 @@ fn link_dependencies(input: &ProgramInput, program: &mut ProgramIr) {
     }
 }
 
-fn add_entrypoints(input: &ProgramInput, program: &mut ProgramIr) {
+fn add_entrypoints(input: &ProgramInput, program: &mut JsProgramIr) {
     for key in input.entrypoints() {
         let module = program
             .module_by_key(key)

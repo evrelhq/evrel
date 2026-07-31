@@ -25,7 +25,7 @@ mod unary;
 mod update;
 mod yield_expression;
 
-use evrel_ir::ValueId;
+use evrel_js_ir::ValueId;
 use oxc_ast::ast::Expression;
 use oxc_span::GetSpan;
 

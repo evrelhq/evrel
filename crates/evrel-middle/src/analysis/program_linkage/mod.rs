@@ -5,7 +5,7 @@ mod resolver;
 #[cfg(test)]
 mod tests;
 
-use evrel_ir::{ModuleKey, ModuleTarget, ProgramBindingId, ProgramIr};
+use evrel_js_ir::{JsProgramIr, ModuleKey, ModuleTarget, ProgramBindingId};
 use rustc_hash::FxHashMap;
 
 /// The program-level target referenced by an imported local binding.
@@ -35,7 +35,7 @@ pub struct ProgramLinkage {
 
 impl ProgramLinkage {
     /// Resolves imported bindings across the program.
-    pub fn analyze(program: &ProgramIr) -> Self {
+    pub fn analyze(program: &JsProgramIr) -> Self {
         Self {
             imported_bindings: resolver::resolve(program),
         }

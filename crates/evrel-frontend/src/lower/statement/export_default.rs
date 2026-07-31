@@ -1,6 +1,6 @@
 //! Default-export expression lowering.
 
-use evrel_ir::{InitializeBindingOp, OperationKind};
+use evrel_js_ir::{InitializeBindingOp, OperationKind};
 use oxc_ast::ast::{ExportDefaultDeclaration, ExportDefaultDeclarationKind};
 
 use crate::{

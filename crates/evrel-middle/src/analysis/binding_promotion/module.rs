@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use evrel_ir::{BindingId, BindingKind, FunctionId, ModuleIr, OperationKind};
+use evrel_js_ir::{BindingId, BindingKind, FunctionId, JsModuleIr, OperationKind};
 
 use super::function::{FunctionBindingPromotion, FunctionBindingPromotionBuilder};
 
@@ -14,7 +14,7 @@ pub struct ModuleBindingPromotion {
 
 impl ModuleBindingPromotion {
     /// Computes conservative binding-promotion eligibility.
-    pub fn compute(module: &ModuleIr) -> Self {
+    pub fn compute(module: &JsModuleIr) -> Self {
         let mut builders = module
             .functions()
             .map(|(function, _)| (function, FunctionBindingPromotionBuilder::default()))
@@ -52,7 +52,7 @@ impl ModuleBindingPromotion {
 }
 
 fn add_candidates(
-    module: &ModuleIr,
+    module: &JsModuleIr,
     builders: &mut BTreeMap<FunctionId, FunctionBindingPromotionBuilder>,
 ) {
     let exported = module
@@ -79,7 +79,7 @@ fn add_candidates(
 }
 
 fn record_binding_references(
-    module: &ModuleIr,
+    module: &JsModuleIr,
     builders: &mut BTreeMap<FunctionId, FunctionBindingPromotionBuilder>,
 ) {
     for (function_id, function) in module.functions() {
@@ -98,10 +98,10 @@ fn record_binding_references(
 }
 
 fn record_binding_reference(
-    module: &ModuleIr,
+    module: &JsModuleIr,
     builders: &mut BTreeMap<FunctionId, FunctionBindingPromotionBuilder>,
     referencing_function: FunctionId,
-    operation: evrel_ir::OperationId,
+    operation: evrel_js_ir::OperationId,
     binding: BindingId,
 ) {
     let declaring_function = module
@@ -127,7 +127,7 @@ fn record_binding_reference(
 }
 
 fn reject_bindings_visible_to_eval(
-    module: &ModuleIr,
+    module: &JsModuleIr,
     builders: &mut BTreeMap<FunctionId, FunctionBindingPromotionBuilder>,
 ) {
     let eval_functions = module
@@ -167,26 +167,30 @@ fn reject_bindings_visible_to_eval(
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
+    use evrel_js_ir::{
         BindingId, BindingKind, ConstantOp, ConstantValue, FunctionId, FunctionKind, FunctionMode,
-        InitializeBindingOp, LoadBindingOp, LoadGlobalOp, ModuleBuilder, ModuleExport,
-        ModuleExportName, ModuleIr, OperationKind, TextRange, UnwindTarget,
+        InitializeBindingOp, JsModuleIr, LoadBindingOp, LoadGlobalOp, ModuleBuilder, ModuleExport,
+        ModuleExportName, OperationKind, TextRange, UnwindTarget,
     };
 
     use super::ModuleBindingPromotion;
 
-    fn initialize_with_undefined(module: &mut ModuleIr, function: FunctionId, binding: BindingId) {
+    fn initialize_with_undefined(
+        module: &mut JsModuleIr,
+        function: FunctionId,
+        binding: BindingId,
+    ) {
         let mut module_builder = ModuleBuilder::new(module);
         let mut builder = module_builder.function_builder(function);
         let undefined = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
             UnwindTarget::Propagate,
         );
         let undefined = builder.operation_results(undefined)[0];
         builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
             [undefined],
             UnwindTarget::Propagate,
@@ -195,7 +199,7 @@ mod tests {
 
     #[test]
     fn accepts_a_local_var_and_ignores_other_binding_kinds() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let entry = module.entry_function();
 
         let (function, var_binding, let_binding) = {
@@ -220,7 +224,7 @@ mod tests {
 
     #[test]
     fn excludes_a_binding_declared_by_the_entry_function() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let binding = {
@@ -236,7 +240,7 @@ mod tests {
 
     #[test]
     fn excludes_an_exported_binding() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let binding = {
@@ -261,7 +265,7 @@ mod tests {
 
     #[test]
     fn rejects_a_binding_captured_by_a_nested_function() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let entry = module.entry_function();
 
         let (function, binding, nested) = {
@@ -279,7 +283,7 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(nested);
             builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
                 UnwindTarget::Propagate,
@@ -293,7 +297,7 @@ mod tests {
 
     #[test]
     fn rejects_bindings_visible_to_possible_direct_eval() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let entry = module.entry_function();
 
         let (function, binding) = {
@@ -309,7 +313,7 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function);
             builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("eval")),
                 [],
                 UnwindTarget::Propagate,

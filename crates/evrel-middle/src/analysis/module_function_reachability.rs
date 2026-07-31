@@ -1,6 +1,6 @@
 //! Reachability of module-owned function bodies.
 
-use evrel_ir::{FunctionId, ModuleIr};
+use evrel_js_ir::{FunctionId, JsModuleIr};
 use rustc_hash::FxHashSet;
 
 use crate::work_queue::WorkQueue;
@@ -13,7 +13,7 @@ pub struct ModuleFunctionReachability {
 
 impl ModuleFunctionReachability {
     /// Computes function reachability through static IR references.
-    pub fn compute(module: &ModuleIr) -> Self {
+    pub fn compute(module: &JsModuleIr) -> Self {
         let mut reachable = FxHashSet::default();
         let mut work = WorkQueue::new();
 
@@ -45,7 +45,7 @@ impl ModuleFunctionReachability {
 }
 
 fn retain_with_parents(
-    module: &ModuleIr,
+    module: &JsModuleIr,
     mut function: FunctionId,
     reachable: &mut FxHashSet<FunctionId>,
     work: &mut WorkQueue<FunctionId>,
@@ -69,8 +69,8 @@ fn retain_with_parents(
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        CreateFunctionOp, FunctionKind, FunctionMode, ModuleBuilder, ModuleIr, OperationKind,
+    use evrel_js_ir::{
+        CreateFunctionOp, FunctionKind, FunctionMode, JsModuleIr, ModuleBuilder, OperationKind,
         UnwindTarget,
     };
 
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn follows_transitive_function_references() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let entry = module.entry_function();
 
         let (outer, inner, orphan) = {
@@ -90,13 +90,13 @@ mod tests {
                 builder.create_function(FunctionKind::Ordinary, FunctionMode::Normal, entry);
 
             builder.function_builder(entry).append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(outer)),
                 [],
                 UnwindTarget::Propagate,
             );
             builder.function_builder(outer).append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(inner)),
                 [],
                 UnwindTarget::Propagate,
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn retains_lexical_parents_of_referenced_functions() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let entry = module.entry_function();
 
         let (outer, inner) = {
@@ -125,7 +125,7 @@ mod tests {
             let inner = builder.create_function(FunctionKind::Arrow, FunctionMode::Normal, outer);
 
             builder.function_builder(entry).append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(inner)),
                 [],
                 UnwindTarget::Propagate,

@@ -1,6 +1,6 @@
 //! JavaScript `for...of` statement lowering.
 
-use evrel_ir::{BlockTarget, ForOfKind, ForOfOp, JumpOp, OperationKind};
+use evrel_js_ir::{BlockTarget, ForOfKind, ForOfOp, JumpOp, OperationKind};
 use oxc_ast::ast::ForOfStatement;
 
 use crate::{

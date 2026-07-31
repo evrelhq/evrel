@@ -9,7 +9,7 @@ mod program_input;
 
 pub use compile::{compile, compile_program};
 pub use error::CompilerError;
-pub use evrel_ir::{
+pub use evrel_js_ir::{
     ModuleAttribute, ModuleExportName, ModuleKey, ModuleRequest, ModuleRequestKind,
 };
 pub use input::CompileInput;

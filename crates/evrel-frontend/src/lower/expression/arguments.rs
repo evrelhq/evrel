@@ -1,6 +1,6 @@
 //! Shared JavaScript argument-list lowering.
 
-use evrel_ir::CallArgument;
+use evrel_js_ir::CallArgument;
 use oxc_ast::ast::Argument;
 
 use crate::{FrontendError, lower::FunctionLowerer};

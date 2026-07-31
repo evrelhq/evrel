@@ -1,6 +1,6 @@
 //! JavaScript conditional-expression lowering.
 
-use evrel_ir::{BlockTarget, IfOp, JumpOp, OperationKind, ValueId};
+use evrel_js_ir::{BlockTarget, IfOp, JumpOp, OperationKind, ValueId};
 use oxc_ast::ast::ConditionalExpression;
 
 use crate::{FrontendError, lower::FunctionLowerer};

@@ -1,6 +1,6 @@
 //! Return statement lowering.
 
-use evrel_ir::{ConstantOp, ConstantValue, OperationKind, ReturnOp};
+use evrel_js_ir::{ConstantOp, ConstantValue, OperationKind, ReturnOp};
 use oxc_ast::ast::ReturnStatement;
 
 use crate::{

@@ -1,6 +1,8 @@
 //! Pruning of unreachable static module imports and exports.
 
-use evrel_ir::{ModuleEditor, ModuleExport, ModuleId, ModuleImport, ModuleIr, ProgramBindingId};
+use evrel_js_ir::{
+    JsModuleIr, ModuleEditor, ModuleExport, ModuleId, ModuleImport, ProgramBindingId,
+};
 
 use crate::analysis::ProgramReachability;
 
@@ -14,7 +16,7 @@ use crate::analysis::ProgramReachability;
 /// Returns the total number of removed import bindings and export entries.
 pub(super) fn prune(
     module: ModuleId,
-    ir: &mut ModuleIr,
+    ir: &mut JsModuleIr,
     reachability: &ProgramReachability,
 ) -> usize {
     let mut removed_bindings = Vec::new();

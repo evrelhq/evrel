@@ -1,6 +1,6 @@
 //! JavaScript declaration discovery.
 
-use evrel_ir::{
+use evrel_js_ir::{
     BindingId, BindingKind, ConstantOp, ConstantValue, CreateFunctionOp, InitializeBindingOp,
     ModuleBuilder, OperationKind, StoreBindingOp,
 };
@@ -356,7 +356,7 @@ fn unsupported_declaration(scoping: &Scoping, symbol: SymbolId) -> FrontendError
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{BindingKind, ModuleBuilder, ModuleIr};
+    use evrel_js_ir::{BindingKind, JsModuleIr, ModuleBuilder};
     use oxc_allocator::Allocator;
     use oxc_span::SourceType;
 
@@ -369,7 +369,7 @@ mod tests {
         let allocator = Allocator::new();
         let parsed =
             parse_module(&allocator, r#"const message = "hello";"#, SourceType::mjs()).unwrap();
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
 
         {
             let mut builder = ModuleBuilder::new(&mut module);
@@ -389,7 +389,7 @@ mod tests {
     fn declares_root_let_bindings() {
         let allocator = Allocator::new();
         let parsed = parse_module(&allocator, "let value;", SourceType::mjs()).unwrap();
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
 
         {
             let mut builder = ModuleBuilder::new(&mut module);
@@ -409,7 +409,7 @@ mod tests {
     fn declares_root_function_bindings() {
         let allocator = Allocator::new();
         let parsed = parse_module(&allocator, "function read() {}", SourceType::mjs()).unwrap();
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
 
         {
             let mut builder = ModuleBuilder::new(&mut module);

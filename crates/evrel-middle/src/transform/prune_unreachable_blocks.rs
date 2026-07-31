@@ -1,6 +1,6 @@
 //! Removal of blocks that cannot execute.
 
-use evrel_ir::{BlockId, FunctionEditor, FunctionIr};
+use evrel_js_ir::{BlockId, FunctionEditor, JsFunctionIr};
 use rustc_hash::FxHashSet;
 
 use crate::work_queue::WorkQueue;
@@ -8,7 +8,7 @@ use crate::work_queue::WorkQueue;
 /// Removes blocks unreachable from executable or structurally live roots.
 ///
 /// Returns the number of removed blocks.
-pub fn prune_unreachable_blocks(function: &mut FunctionIr) -> usize {
+pub fn prune_unreachable_blocks(function: &mut JsFunctionIr) -> usize {
     let blocks = plan_unreachable_blocks(function);
     let removed = blocks.len();
 
@@ -19,7 +19,7 @@ pub fn prune_unreachable_blocks(function: &mut FunctionIr) -> usize {
     removed
 }
 
-fn plan_unreachable_blocks(function: &FunctionIr) -> Vec<BlockId> {
+fn plan_unreachable_blocks(function: &JsFunctionIr) -> Vec<BlockId> {
     let mut retained = FxHashSet::default();
     let mut work = WorkQueue::new();
 
@@ -92,8 +92,8 @@ fn retain(block: BlockId, retained: &mut FxHashSet<BlockId>, work: &mut WorkQueu
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BlockTarget, ConstantOp, ConstantValue, IfOp, LoadThisOp, ModuleBuilder, ModuleIr,
+    use evrel_js_ir::{
+        BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, LoadThisOp, ModuleBuilder,
         OperationKind, ReturnOp, UnwindTarget,
     };
 
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn removes_a_detached_block() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let detached = {
@@ -111,7 +111,7 @@ mod tests {
             let returned = append_number(&mut builder, 1.0);
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
                 UnwindTarget::Propagate,
@@ -120,7 +120,7 @@ mod tests {
             builder.switch_to_block(detached);
             let returned = append_number(&mut builder, 2.0);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
                 UnwindTarget::Propagate,
@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn preserves_structurally_referenced_blocks() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
         let completion = {
@@ -152,7 +152,7 @@ mod tests {
             let else_block = builder.create_block();
             let completion = builder.create_block();
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadThis(LoadThisOp::new()),
                 [],
                 UnwindTarget::Propagate,
@@ -160,7 +160,7 @@ mod tests {
             let condition = builder.operation_results(condition)[0];
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(then_block, 0),
                     BlockTarget::new(else_block, 0),
@@ -174,7 +174,7 @@ mod tests {
                 builder.switch_to_block(block);
                 let returned = append_number(&mut builder, 1.0);
                 builder.terminate(
-                    evrel_ir::LocationId::UNKNOWN,
+                    evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [returned],
                     UnwindTarget::Propagate,
@@ -184,7 +184,7 @@ mod tests {
             builder.switch_to_block(completion);
             let returned = append_number(&mut builder, 2.0);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
                 UnwindTarget::Propagate,
@@ -206,9 +206,12 @@ mod tests {
         );
     }
 
-    fn append_number(builder: &mut evrel_ir::FunctionBuilder<'_>, value: f64) -> evrel_ir::ValueId {
+    fn append_number(
+        builder: &mut evrel_js_ir::FunctionBuilder<'_>,
+        value: f64,
+    ) -> evrel_js_ir::ValueId {
         let operation = builder.append_operation(
-            evrel_ir::LocationId::UNKNOWN,
+            evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
             UnwindTarget::Propagate,

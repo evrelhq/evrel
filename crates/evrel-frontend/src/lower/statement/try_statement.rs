@@ -1,6 +1,6 @@
 //! JavaScript `try` statement lowering.
 
-use evrel_ir::{
+use evrel_js_ir::{
     BindingKind, BindingPattern, BindingWriteMode, BlockId, BlockTarget, DestructureBindingOp,
     ExceptionHandlerId, InitializeBindingOp, JumpOp, OperationKind, TryOp, ValueId,
 };

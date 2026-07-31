@@ -1,6 +1,6 @@
 //! Active break and continue targets during function lowering.
 
-use evrel_ir::BlockId;
+use evrel_js_ir::BlockId;
 
 use super::FunctionLowerer;
 

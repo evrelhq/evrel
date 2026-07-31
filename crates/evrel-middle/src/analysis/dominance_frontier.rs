@@ -1,6 +1,6 @@
 //! Dominance-frontier analysis for one IR region.
 
-use evrel_ir::BlockId;
+use evrel_js_ir::BlockId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::work_queue::WorkQueue;
@@ -113,8 +113,8 @@ impl RegionDominanceFrontier {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
-        BlockTarget, ConstantOp, ConstantValue, IfOp, JumpOp, ModuleBuilder, ModuleIr,
+    use evrel_js_ir::{
+        BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, JumpOp, ModuleBuilder,
         OperationKind, UnwindTarget,
     };
 
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn computes_the_frontier_of_a_diamond() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (entry, left, right, join) = {
@@ -135,14 +135,14 @@ mod tests {
             let join = builder.create_block();
 
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -154,7 +154,7 @@ mod tests {
 
             builder.switch_to_block(left);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -162,7 +162,7 @@ mod tests {
 
             builder.switch_to_block(right);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn computes_the_frontier_of_a_loop_backedge() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (header, body, exit) = {
@@ -195,7 +195,7 @@ mod tests {
             let exit = builder.create_block();
 
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -203,14 +203,14 @@ mod tests {
 
             builder.switch_to_block(header);
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(body, 0),
                     BlockTarget::new(exit, 0),
@@ -222,7 +222,7 @@ mod tests {
 
             builder.switch_to_block(body);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn computes_an_iterated_frontier_across_two_merges() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (left, right, first_join, second_join) = {
@@ -257,14 +257,14 @@ mod tests {
             let second_join = builder.create_block();
 
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(first_split, 0),
                     BlockTarget::new(bypass, 0),
@@ -276,14 +276,14 @@ mod tests {
 
             builder.switch_to_block(first_split);
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -296,7 +296,7 @@ mod tests {
             for block in [left, right] {
                 builder.switch_to_block(block);
                 builder.terminate(
-                    evrel_ir::LocationId::UNKNOWN,
+                    evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Jump(JumpOp::new(BlockTarget::new(first_join, 0))),
                     [],
                     UnwindTarget::Propagate,
@@ -305,7 +305,7 @@ mod tests {
 
             builder.switch_to_block(first_join);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(second_join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -313,7 +313,7 @@ mod tests {
 
             builder.switch_to_block(bypass);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(second_join, 0))),
                 [],
                 UnwindTarget::Propagate,

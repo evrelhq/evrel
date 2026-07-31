@@ -1,6 +1,6 @@
 //! JavaScript array-expression lowering.
 
-use evrel_ir::{ArrayLiteralElement, ArrayLiteralOp, OperationKind, ValueId};
+use evrel_js_ir::{ArrayLiteralElement, ArrayLiteralOp, OperationKind, ValueId};
 use oxc_ast::ast::{ArrayExpression, ArrayExpressionElement};
 
 use crate::{FrontendError, lower::FunctionLowerer};

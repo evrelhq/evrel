@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use evrel_ir::{
-    BindingId, FunctionIr, FunctionMode, OperationId, OperationKind, ValueDefinition, ValueId,
+use evrel_js_ir::{
+    BindingId, FunctionMode, JsFunctionIr, OperationId, OperationKind, ValueDefinition, ValueId,
 };
 
 use super::super::{RegionControlFlowGraph, RegionDominatorTree};
@@ -114,7 +114,7 @@ impl FunctionBindingPromotionBuilder {
     /// operation shape.
     pub(super) fn record_reference(
         &mut self,
-        function: &FunctionIr,
+        function: &JsFunctionIr,
         operation: OperationId,
         binding: BindingId,
     ) {
@@ -151,7 +151,7 @@ impl FunctionBindingPromotionBuilder {
     }
 
     /// Finishes local eligibility using ordinary regional control flow.
-    pub(super) fn finish(self, function: &FunctionIr) -> FunctionBindingPromotion {
+    pub(super) fn finish(self, function: &JsFunctionIr) -> FunctionBindingPromotion {
         // Suspension is not yet represented as explicit regional CFG edges.
         if function.mode() != FunctionMode::Normal {
             return FunctionBindingPromotion::default();
@@ -202,7 +202,7 @@ impl BindingCandidate {
 }
 
 fn finish_candidate(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     graph: &RegionControlFlowGraph,
     dominance: &RegionDominatorTree,
     candidate: BindingCandidate,
@@ -250,7 +250,7 @@ fn finish_candidate(
 }
 
 fn operation_dominates(
-    function: &FunctionIr,
+    function: &JsFunctionIr,
     dominance: &RegionDominatorTree,
     dominator: OperationId,
     operation: OperationId,
@@ -286,7 +286,7 @@ fn operation_dominates(
     dominator_index < operation_index
 }
 
-fn requires_named_evaluation(function: &FunctionIr, value: ValueId) -> bool {
+fn requires_named_evaluation(function: &JsFunctionIr, value: ValueId) -> bool {
     let value = function
         .value(value)
         .expect("binding write must use a live value");
@@ -306,9 +306,9 @@ fn requires_named_evaluation(function: &FunctionIr, value: ValueId) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use evrel_ir::{
+    use evrel_js_ir::{
         BindingKind, BlockTarget, ConstantOp, ConstantValue, CreateFunctionOp, FunctionKind,
-        FunctionMode, IfOp, InitializeBindingOp, JumpOp, LoadBindingOp, ModuleBuilder, ModuleIr,
+        FunctionMode, IfOp, InitializeBindingOp, JsModuleIr, JumpOp, LoadBindingOp, ModuleBuilder,
         OperationKind, StoreBindingOp, UnwindTarget,
     };
 
@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn accepts_a_dominated_initialization_store_and_load() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (binding, initialization, store, load) = {
@@ -325,34 +325,34 @@ mod tests {
             let mut builder = module_builder.function_builder(function_id);
 
             let initial = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial)[0];
             let initialization = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
                 [initial],
                 UnwindTarget::Propagate,
             );
 
             let replacement = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
                 UnwindTarget::Propagate,
             );
             let replacement = builder.operation_results(replacement)[0];
             let store = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::StoreBinding(StoreBindingOp::new(binding)),
                 [replacement],
                 UnwindTarget::Propagate,
             );
             let load = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
                 UnwindTarget::Propagate,
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn rejects_an_initialization_that_does_not_dominate_a_load() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (binding, initialization, load) = {
@@ -390,14 +390,14 @@ mod tests {
             let join = builder.create_block();
 
             let condition = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
                 UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::If(IfOp::new(
                     BlockTarget::new(left, 0),
                     BlockTarget::new(right, 0),
@@ -409,20 +409,20 @@ mod tests {
 
             builder.switch_to_block(left);
             let initial = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial)[0];
             let initialization = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
                 [initial],
                 UnwindTarget::Propagate,
             );
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -430,7 +430,7 @@ mod tests {
 
             builder.switch_to_block(right);
             builder.terminate(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
                 UnwindTarget::Propagate,
@@ -438,7 +438,7 @@ mod tests {
 
             builder.switch_to_block(join);
             let load = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
                 UnwindTarget::Propagate,
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn rejects_a_write_that_requires_named_evaluation() {
-        let mut module = ModuleIr::new();
+        let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
 
         let (binding, initialization, store) = {
@@ -474,28 +474,28 @@ mod tests {
             let mut builder = module_builder.function_builder(function_id);
 
             let initial = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
                 UnwindTarget::Propagate,
             );
             let initial = builder.operation_results(initial)[0];
             let initialization = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
                 [initial],
                 UnwindTarget::Propagate,
             );
 
             let function = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(created_function)),
                 [],
                 UnwindTarget::Propagate,
             );
             let function = builder.operation_results(function)[0];
             let store = builder.append_operation(
-                evrel_ir::LocationId::UNKNOWN,
+                evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::StoreBinding(StoreBindingOp::new(binding)),
                 [function],
                 UnwindTarget::Propagate,
