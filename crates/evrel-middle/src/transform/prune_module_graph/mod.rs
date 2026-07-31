@@ -1,22 +1,20 @@
-//! Coordinated removal of unreachable program entities.
+//! Pruning of unreachable modules and module-interface entries.
 
 use evrel_ir::ProgramIr;
 
 use crate::analysis::ProgramReachability;
 
-mod bindings;
 mod interface;
 mod modules;
 
-/// Counts of entities removed while applying program reachability.
+/// Counts of module-graph entities removed while applying reachability.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct ProgramPruning {
+pub struct ModuleGraphPruning {
     removed_modules: usize,
     removed_interface_entries: usize,
-    removed_bindings: usize,
 }
 
-impl ProgramPruning {
+impl ModuleGraphPruning {
     /// Returns the number of removed modules.
     pub const fn removed_modules(self) -> usize {
         self.removed_modules
@@ -26,28 +24,22 @@ impl ProgramPruning {
     pub const fn removed_interface_entries(self) -> usize {
         self.removed_interface_entries
     }
-
-    /// Returns the number of removed module bindings.
-    pub const fn removed_bindings(self) -> usize {
-        self.removed_bindings
-    }
 }
 
-/// Applies a program-reachability result in dependency order.
+/// Removes unreachable modules and module-interface entries.
 ///
-/// Unreachable modules are removed first. Each retained module then has its
-/// import/export interface pruned before its now-unreferenced bindings.
-pub fn prune_unreachable_program(
+/// Unreachable modules are removed before the import/export interface of each
+/// retained module is pruned.
+pub fn prune_module_graph(
     program: &mut ProgramIr,
     reachability: &ProgramReachability,
-) -> ProgramPruning {
+) -> ModuleGraphPruning {
     let removed_modules = modules::prune(program, reachability);
     let modules = program
         .modules()
         .map(|(module, _)| module)
         .collect::<Vec<_>>();
     let mut removed_interface_entries = 0;
-    let mut removed_bindings = 0;
 
     for module in modules {
         let ir = program
@@ -55,12 +47,10 @@ pub fn prune_unreachable_program(
             .expect("collected program module must remain live");
 
         removed_interface_entries += interface::prune(module, ir, reachability);
-        removed_bindings += bindings::prune(module, ir, reachability);
     }
 
-    ProgramPruning {
+    ModuleGraphPruning {
         removed_modules,
         removed_interface_entries,
-        removed_bindings,
     }
 }

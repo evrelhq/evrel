@@ -1,4 +1,4 @@
-//! Coordinated pruning of unreachable static module imports and exports.
+//! Pruning of unreachable static module imports and exports.
 
 use evrel_ir::{ModuleEditor, ModuleExport, ModuleId, ModuleImport, ModuleIr, ProgramBindingId};
 

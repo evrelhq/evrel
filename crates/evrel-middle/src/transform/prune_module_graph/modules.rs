@@ -1,4 +1,4 @@
-//! Removal of modules outside every program entry dependency closure.
+//! Removal of modules outside the program entry dependency closure.
 
 use evrel_ir::{ProgramEditor, ProgramIr};
 
