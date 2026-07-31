@@ -3,10 +3,12 @@
 use evrel_codegen_js::generate;
 use evrel_frontend::lower_source_file;
 use evrel_ir::{FunctionIr, ModuleIr};
+use evrel_middle::analysis::{ProgramLinkage, ProgramReachability};
 use evrel_middle::transform::{
     eliminate_common_subexpressions, eliminate_dead_code, promote_bindings_to_ssa,
     propagate_constants, prune_unreachable_blocks, prune_unreachable_functions,
-    simplify_block_parameters, simplify_control_flow, simplify_operations,
+    prune_unreachable_program, simplify_block_parameters, simplify_control_flow,
+    simplify_operations,
 };
 use rayon::prelude::*;
 
@@ -27,6 +29,11 @@ pub fn compile(input: CompileInput<'_>) -> Result<CompileOutput, CompilerError> 
 /// Compiles a complete host-resolved JavaScript program.
 pub fn compile_program(input: ProgramInput) -> Result<ProgramOutput, CompilerError> {
     let mut program = build_program_ir(&input)?;
+    let linkage = ProgramLinkage::analyze(&program);
+    let reachability = ProgramReachability::compute(&program, &linkage);
+
+    prune_unreachable_program(&mut program, &reachability);
+
     let modules = program
         .modules()
         .map(|(module, data)| (module, data.key().clone()))

@@ -7,6 +7,8 @@ mod dominator_tree;
 mod function_value;
 mod module_function_reachability;
 mod operation_safety;
+mod program_linkage;
+mod program_reachability;
 
 pub use binding_promotion::{FunctionBindingPromotion, ModuleBindingPromotion, PromotableBinding};
 pub use control_flow::{RegionControlFlowError, RegionControlFlowGraph};
@@ -15,3 +17,5 @@ pub use dominator_tree::RegionDominatorTree;
 pub use function_value::{AbstractValue, FunctionValueAnalysis, FunctionValueInputs, ValueTypeSet};
 pub use module_function_reachability::ModuleFunctionReachability;
 pub use operation_safety::is_safe_to_remove;
+pub use program_linkage::{ImportedBindingTarget, ProgramLinkage};
+pub use program_reachability::ProgramReachability;

@@ -268,12 +268,18 @@ fn collect_exports(
         }
 
         if let Some(source) = &declaration.source {
-            if declaration.declaration.is_some() || declaration.specifiers.is_empty() {
+            if declaration.declaration.is_some() {
                 return Err(FrontendError::UnsupportedStatement);
             }
 
             let source = source.value.as_str();
             let attributes = lower_module_attributes(declaration.with_clause.as_deref());
+
+            if declaration.specifiers.is_empty() {
+                let location = source_location(builder, source_file, declaration.span());
+                builder.add_export(ModuleExport::empty(location, source, attributes));
+                continue;
+            }
 
             for specifier in &declaration.specifiers {
                 if specifier.export_kind == ImportOrExportKind::Type {

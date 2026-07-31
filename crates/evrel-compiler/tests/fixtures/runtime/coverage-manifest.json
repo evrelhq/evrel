@@ -316,6 +316,7 @@
     "OperationKind::Yield": "generators",
     "UnwindTarget::Handler": "exceptions",
     "UnwindTarget::Propagate": "exceptions",
+    "ModuleExport::Empty": "module_graphs",
     "ModuleExport::Indirect": "module_graphs",
     "ModuleExport::Local": "module_graphs",
     "ModuleExport::Namespace": "module_graphs",
