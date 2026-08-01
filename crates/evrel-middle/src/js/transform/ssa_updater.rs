@@ -34,11 +34,13 @@ pub(super) struct UseRewrite {
 
 impl UseRewrite {
     /// Returns the operation result being replaced.
+    #[cfg(test)]
     pub(super) const fn result(self) -> ValueId {
         self.result
     }
 
     /// Returns the value that should replace the result.
+    #[cfg(test)]
     pub(super) const fn replacement(self) -> ReachingValue {
         self.replacement
     }
