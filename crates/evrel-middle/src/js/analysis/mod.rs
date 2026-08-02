@@ -12,6 +12,7 @@ mod operation_safety;
 mod program_call_graph;
 mod program_linkage;
 mod program_reachability;
+mod region_capture;
 
 pub use binding_promotion::{FunctionBindingPromotion, ModuleBindingPromotion, PromotableBinding};
 pub use control_flow::RegionControlFlowGraph;
@@ -30,3 +31,4 @@ pub use program_call_graph::{
 };
 pub use program_linkage::{ImportedBindingTarget, ProgramLinkage};
 pub use program_reachability::ProgramReachability;
+pub use region_capture::RegionCaptureAnalysis;
