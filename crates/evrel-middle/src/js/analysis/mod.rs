@@ -8,6 +8,7 @@ mod dominator_tree;
 mod function_capture;
 mod function_pointer;
 mod function_value;
+mod function_value_dependence;
 mod module_function_reachability;
 mod operation_safety;
 mod program_call_graph;
@@ -25,6 +26,7 @@ pub use function_pointer::{
     FunctionPointerAnalysis, PointsToSet,
 };
 pub use function_value::{AbstractValue, FunctionValueAnalysis, FunctionValueInputs, ValueTypeSet};
+pub use function_value_dependence::FunctionValueDependenceAnalysis;
 pub use module_function_reachability::ModuleFunctionReachability;
 pub use operation_safety::is_safe_to_remove;
 pub use program_call_graph::{
