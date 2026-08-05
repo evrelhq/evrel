@@ -35,8 +35,8 @@ pub struct FunctionEscapeAnalysis {
 }
 
 impl FunctionEscapeAnalysis {
-    /// Computes escape facts for one function.
-    pub fn compute(module: &JsModuleIr, function: FunctionId) -> Option<Self> {
+    /// Analyzes escape facts for one function.
+    pub fn analyze(module: &JsModuleIr, function: FunctionId) -> Option<Self> {
         let function_ir = module.function(function)?;
         let local_values = function_ir
             .operations()
@@ -68,7 +68,7 @@ impl FunctionEscapeAnalysis {
                 Some(result)
             })
             .collect();
-        let escaping = EscapeGraph::compute(module, function, function_ir);
+        let escaping = EscapeGraph::analyze(module, function, function_ir);
 
         Some(Self {
             function,

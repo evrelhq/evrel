@@ -19,7 +19,7 @@ fn classifies_return_call_and_unused_values() {
     )
     .unwrap();
     let function = test_function(&module);
-    let analysis = FunctionEscapeAnalysis::compute(&module, function).unwrap();
+    let analysis = FunctionEscapeAnalysis::analyze(&module, function).unwrap();
     let objects = operation_results(&module, function, |kind| {
         matches!(kind, OperationKind::ObjectLiteral(_))
     });
@@ -50,7 +50,7 @@ fn treats_unknown_origins_conservatively() {
     let call = operation_result(&module, function, |kind| {
         matches!(kind, OperationKind::Call(_))
     });
-    let analysis = FunctionEscapeAnalysis::compute(&module, function).unwrap();
+    let analysis = FunctionEscapeAnalysis::analyze(&module, function).unwrap();
 
     assert_eq!(analysis.escape_result(call), None);
     assert!(analysis.may_escape(call));
@@ -78,7 +78,7 @@ fn follows_local_bindings_and_forwarded_block_values() {
     });
 
     assert!(
-        FunctionEscapeAnalysis::compute(&module, function)
+        FunctionEscapeAnalysis::analyze(&module, function)
             .unwrap()
             .may_escape(object)
     );
@@ -100,7 +100,7 @@ fn escaping_containers_escape_their_contents() {
     let objects = operation_results(&module, function, |kind| {
         matches!(kind, OperationKind::ObjectLiteral(_))
     });
-    let analysis = FunctionEscapeAnalysis::compute(&module, function).unwrap();
+    let analysis = FunctionEscapeAnalysis::analyze(&module, function).unwrap();
 
     assert_eq!(objects.len(), 2);
     assert!(objects.into_iter().all(|value| analysis.may_escape(value)));
@@ -124,7 +124,7 @@ fn follows_values_captured_by_an_escaping_closure() {
     });
 
     assert!(
-        FunctionEscapeAnalysis::compute(&module, function)
+        FunctionEscapeAnalysis::analyze(&module, function)
             .unwrap()
             .may_escape(object)
     );
@@ -148,7 +148,7 @@ fn strict_comparison_observes_without_escaping() {
     });
 
     assert_eq!(
-        FunctionEscapeAnalysis::compute(&module, function)
+        FunctionEscapeAnalysis::analyze(&module, function)
             .unwrap()
             .escape_result(object),
         Some(ValueEscape::DoesNotEscape)
@@ -164,7 +164,7 @@ fn exported_bindings_escape_their_values() {
     });
 
     assert_eq!(
-        FunctionEscapeAnalysis::compute(&module, function)
+        FunctionEscapeAnalysis::analyze(&module, function)
             .unwrap()
             .escape_result(object),
         Some(ValueEscape::MayEscape)
@@ -181,7 +181,7 @@ fn dynamic_import_promises_escape_to_the_host() {
     });
 
     assert_eq!(
-        FunctionEscapeAnalysis::compute(&module, function)
+        FunctionEscapeAnalysis::analyze(&module, function)
             .unwrap()
             .escape_result(promise),
         Some(ValueEscape::MayEscape)

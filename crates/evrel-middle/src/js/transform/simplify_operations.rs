@@ -15,7 +15,7 @@ use crate::js::work_queue::WorkQueue;
 /// rewrites and immediately revisits affected users.
 ///
 pub fn simplify_operations(function: &mut JsFunctionIr) -> usize {
-    let values = FunctionValueAnalysis::compute(function);
+    let values = FunctionValueAnalysis::analyze(function);
 
     let mut work = WorkQueue::new();
 

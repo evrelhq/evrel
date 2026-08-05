@@ -12,7 +12,7 @@ use rewrite::{plan_constant_replacements, rewrite_constants};
 ///
 pub fn propagate_constants(function: &mut JsFunctionIr) -> usize {
     let replacements = {
-        let analysis = FunctionValueAnalysis::compute(function);
+        let analysis = FunctionValueAnalysis::analyze(function);
 
         plan_constant_replacements(function, &analysis)
     };

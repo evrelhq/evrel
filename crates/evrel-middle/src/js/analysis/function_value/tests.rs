@@ -33,7 +33,7 @@ fn propagates_constants_through_straight_line_ssa() {
         result
     };
 
-    let analysis = SparseValueAnalysis::compute(
+    let analysis = SparseValueAnalysis::analyze(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
     );
@@ -98,7 +98,7 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
         (branch, then_block, else_block, joined)
     };
 
-    let analysis = SparseValueAnalysis::compute(
+    let analysis = SparseValueAnalysis::analyze(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
     );
@@ -116,7 +116,7 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
 #[test]
 fn retains_an_equal_constant_from_multiple_executable_edges() {
     let (module, function, joined) = build_dynamic_diamond(1.0, 1.0);
-    let analysis = SparseValueAnalysis::compute(
+    let analysis = SparseValueAnalysis::analyze(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
     );
@@ -130,7 +130,7 @@ fn retains_an_equal_constant_from_multiple_executable_edges() {
 #[test]
 fn loses_constant_information_at_a_conflicting_join() {
     let (module, function, joined) = build_dynamic_diamond(1.0, 2.0);
-    let analysis = SparseValueAnalysis::compute(
+    let analysis = SparseValueAnalysis::analyze(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
     );
@@ -205,7 +205,7 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
         (carried, derived)
     };
 
-    let analysis = SparseValueAnalysis::compute(
+    let analysis = SparseValueAnalysis::analyze(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
     );

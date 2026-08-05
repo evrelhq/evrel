@@ -52,7 +52,7 @@ mod tests {
         ));
 
         let linkage = ProgramLinkage::analyze(&program);
-        let reachability = ProgramReachability::compute(&program, &linkage);
+        let reachability = ProgramReachability::analyze(&program, &linkage);
         assert_eq!(prune(&mut program, &reachability), 1);
         assert!(program.module(entry).is_some());
         assert!(program.module(dependency).is_some());

@@ -34,7 +34,7 @@ struct FoldConstantIf {
 
 fn fold_constant_ifs(function: &mut JsFunctionIr) -> usize {
     let rewrites = {
-        let analysis = FunctionValueAnalysis::compute(function);
+        let analysis = FunctionValueAnalysis::analyze(function);
 
         function
             .operations()

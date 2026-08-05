@@ -123,7 +123,7 @@ mod tests {
         };
 
         let function = module.function(function).unwrap();
-        let values = FunctionValueAnalysis::compute(function);
+        let values = FunctionValueAnalysis::analyze(function);
 
         assert!(is_safe_to_remove(function, &values, addition));
     }
@@ -161,7 +161,7 @@ mod tests {
         };
 
         let function = module.function(function).unwrap();
-        let values = FunctionValueAnalysis::compute(function);
+        let values = FunctionValueAnalysis::analyze(function);
 
         assert!(!is_safe_to_remove(function, &values, addition));
     }
@@ -197,7 +197,7 @@ mod tests {
         };
 
         let function = module.function(function).unwrap();
-        let values = FunctionValueAnalysis::compute(function);
+        let values = FunctionValueAnalysis::analyze(function);
 
         assert!(!is_safe_to_remove(function, &values, debugger));
     }

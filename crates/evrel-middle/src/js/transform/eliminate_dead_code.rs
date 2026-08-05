@@ -10,7 +10,7 @@ use crate::js::work_queue::WorkQueue;
 ///
 pub fn eliminate_dead_code(function: &mut JsFunctionIr) -> usize {
     let removals = {
-        let values = FunctionValueAnalysis::compute(function);
+        let values = FunctionValueAnalysis::analyze(function);
 
         plan_dead_operations(function, &values)
     };

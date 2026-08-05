@@ -15,7 +15,7 @@ use crate::js::analysis::{
 ///
 pub fn eliminate_common_subexpressions(function: &mut JsFunctionIr) -> usize {
     let replacements = {
-        let values = FunctionValueAnalysis::compute(function);
+        let values = FunctionValueAnalysis::analyze(function);
 
         let Some(replacements) = plan_replacements(function, &values) else {
             return 0;

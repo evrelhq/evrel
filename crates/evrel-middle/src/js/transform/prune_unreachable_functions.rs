@@ -9,7 +9,7 @@ use crate::js::analysis::ModuleFunctionReachability;
 /// Returns the number of removed functions.
 pub fn prune_unreachable_functions(module: &mut JsModuleIr) -> usize {
     let unreachable = {
-        let reachability = ModuleFunctionReachability::compute(module);
+        let reachability = ModuleFunctionReachability::analyze(module);
 
         module
             .functions()

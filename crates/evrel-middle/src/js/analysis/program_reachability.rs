@@ -26,12 +26,12 @@ pub struct ProgramReachability {
 }
 
 impl ProgramReachability {
-    /// Computes conservative reachability from program entry modules.
+    /// Analyzes conservative reachability from program entry modules.
     ///
     /// If a reachable static import or re-export has no unique resolved edge,
     /// every owned module and binding is retained because the missing target
     /// could refer to any program entity.
-    pub fn compute(program: &JsProgramIr, linkage: &ProgramLinkage) -> Self {
+    pub fn analyze(program: &JsProgramIr, linkage: &ProgramLinkage) -> Self {
         let dependencies = DependencyIndex::new(program);
         let mut evaluated_modules = FxHashSet::default();
         let mut live_bindings = FxHashSet::default();
@@ -625,10 +625,10 @@ mod tests {
 
     use super::{ProgramLinkage, ProgramReachability};
 
-    fn compute(program: &JsProgramIr) -> ProgramReachability {
+    fn analyze(program: &JsProgramIr) -> ProgramReachability {
         let linkage = ProgramLinkage::analyze(program);
 
-        ProgramReachability::compute(program, &linkage)
+        ProgramReachability::analyze(program, &linkage)
     }
 
     #[test]
@@ -645,7 +645,7 @@ mod tests {
             ModuleTarget::Internal(dependency),
         ));
 
-        let reachability = compute(&program);
+        let reachability = analyze(&program);
 
         assert!(reachability.is_module_evaluated(entry));
         assert!(reachability.is_module_evaluated(dependency));
@@ -667,7 +667,7 @@ mod tests {
             program.add_module(ModuleKey::new("possible-target"), JsModuleIr::new());
         program.add_entry_module(entry);
 
-        let reachability = compute(&program);
+        let reachability = analyze(&program);
 
         assert!(reachability.is_module_evaluated(entry));
         assert!(reachability.is_module_evaluated(possible_target));
@@ -703,7 +703,7 @@ mod tests {
             program.add_module(ModuleKey::new("possible-target"), JsModuleIr::new());
         program.add_entry_module(entry);
 
-        let reachability = compute(&program);
+        let reachability = analyze(&program);
 
         assert!(reachability.is_module_evaluated(entry));
         assert!(reachability.is_module_evaluated(possible_target));
@@ -754,7 +754,7 @@ mod tests {
             ModuleTarget::Internal(dependency),
         ));
 
-        let reachability = compute(&program);
+        let reachability = analyze(&program);
 
         assert_eq!(reachability.evaluated_module_count(), 2);
         assert_eq!(reachability.live_binding_count(), 2);
@@ -799,7 +799,7 @@ mod tests {
             ModuleTarget::Internal(dependency),
         ));
 
-        let reachability = compute(&program);
+        let reachability = analyze(&program);
 
         assert_eq!(reachability.evaluated_module_count(), 2);
         assert_eq!(reachability.live_binding_count(), 0);

@@ -12,8 +12,8 @@ pub struct ModuleFunctionReachability {
 }
 
 impl ModuleFunctionReachability {
-    /// Computes function reachability through static IR references.
-    pub fn compute(module: &JsModuleIr) -> Self {
+    /// Analyzes function reachability through static IR references.
+    pub fn analyze(module: &JsModuleIr) -> Self {
         let mut reachable = FxHashSet::default();
         let mut work = WorkQueue::new();
 
@@ -102,7 +102,7 @@ mod tests {
             (outer, inner, orphan)
         };
 
-        let reachability = ModuleFunctionReachability::compute(&module);
+        let reachability = ModuleFunctionReachability::analyze(&module);
 
         assert!(reachability.is_reachable(entry));
         assert!(reachability.is_reachable(outer));
@@ -130,7 +130,7 @@ mod tests {
             (outer, inner)
         };
 
-        let reachability = ModuleFunctionReachability::compute(&module);
+        let reachability = ModuleFunctionReachability::analyze(&module);
 
         assert!(reachability.is_reachable(outer));
         assert!(reachability.is_reachable(inner));

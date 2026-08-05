@@ -19,7 +19,7 @@ pub(super) struct SparseValueAnalysis {
 }
 
 impl SparseValueAnalysis {
-    pub(super) fn compute(function: &JsFunctionIr, inputs: &FunctionValueInputs) -> Self {
+    pub(super) fn analyze(function: &JsFunctionIr, inputs: &FunctionValueInputs) -> Self {
         SparseValueSolver::new(function, inputs).solve()
     }
 

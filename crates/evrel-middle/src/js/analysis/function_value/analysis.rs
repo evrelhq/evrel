@@ -16,15 +16,15 @@ pub struct FunctionValueAnalysis {
 }
 
 impl FunctionValueAnalysis {
-    /// Computes value facts with unknown external inputs.
-    pub fn compute(function: &JsFunctionIr) -> Self {
-        Self::compute_with_inputs(function, &FunctionValueInputs::new())
+    /// Analyzes value facts with unknown external inputs.
+    pub fn analyze(function: &JsFunctionIr) -> Self {
+        Self::analyze_with_inputs(function, &FunctionValueInputs::new())
     }
 
-    /// Computes value facts with explicitly supplied boundary or result facts.
-    pub fn compute_with_inputs(function: &JsFunctionIr, inputs: &FunctionValueInputs) -> Self {
+    /// Analyzes value facts with explicitly supplied boundary or result facts.
+    pub fn analyze_with_inputs(function: &JsFunctionIr, inputs: &FunctionValueInputs) -> Self {
         Self {
-            sparse: SparseValueAnalysis::compute(function, inputs),
+            sparse: SparseValueAnalysis::analyze(function, inputs),
         }
     }
 

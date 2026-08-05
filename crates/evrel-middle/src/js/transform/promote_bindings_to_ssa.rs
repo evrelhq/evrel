@@ -13,7 +13,7 @@ use super::ssa_updater::{SsaUpdate, SsaUpdater};
 ///
 /// Returns the number of promoted bindings.
 pub fn promote_bindings_to_ssa(module: &mut JsModuleIr) -> usize {
-    let promotion = ModuleBindingPromotion::compute(module);
+    let promotion = ModuleBindingPromotion::analyze(module);
     let mut promoted = 0;
 
     for (function_id, function_promotion) in promotion.functions() {

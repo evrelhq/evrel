@@ -13,8 +13,8 @@ pub struct ModuleBindingPromotion {
 }
 
 impl ModuleBindingPromotion {
-    /// Computes conservative binding-promotion eligibility.
-    pub fn compute(module: &JsModuleIr) -> Self {
+    /// Analyzes conservative binding-promotion eligibility.
+    pub fn analyze(module: &JsModuleIr) -> Self {
         let mut builders = module
             .functions()
             .map(|(function, _)| (function, FunctionBindingPromotionBuilder::default()))
@@ -213,7 +213,7 @@ mod tests {
         initialize_with_undefined(&mut module, function, var_binding);
         initialize_with_undefined(&mut module, function, let_binding);
 
-        let promotion = ModuleBindingPromotion::compute(&module);
+        let promotion = ModuleBindingPromotion::analyze(&module);
         let function_promotion = promotion.function(function).unwrap();
 
         assert!(function_promotion.is_promotable(var_binding));
@@ -231,7 +231,7 @@ mod tests {
         };
         initialize_with_undefined(&mut module, function, binding);
 
-        let promotion = ModuleBindingPromotion::compute(&module);
+        let promotion = ModuleBindingPromotion::analyze(&module);
 
         assert!(!promotion.function(function).unwrap().is_promotable(binding));
     }
@@ -256,7 +256,7 @@ mod tests {
         };
         initialize_with_undefined(&mut module, function, binding);
 
-        let promotion = ModuleBindingPromotion::compute(&module);
+        let promotion = ModuleBindingPromotion::analyze(&module);
 
         assert!(!promotion.function(function).unwrap().is_promotable(binding));
     }
@@ -287,7 +287,7 @@ mod tests {
             );
         }
 
-        let promotion = ModuleBindingPromotion::compute(&module);
+        let promotion = ModuleBindingPromotion::analyze(&module);
 
         assert!(!promotion.function(function).unwrap().is_promotable(binding));
     }
@@ -316,7 +316,7 @@ mod tests {
             );
         }
 
-        let promotion = ModuleBindingPromotion::compute(&module);
+        let promotion = ModuleBindingPromotion::analyze(&module);
 
         assert!(!promotion.function(function).unwrap().is_promotable(binding));
     }

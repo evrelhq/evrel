@@ -35,7 +35,7 @@ pub(super) struct EscapeGraph<'a> {
 }
 
 impl<'a> EscapeGraph<'a> {
-    pub(super) fn compute(
+    pub(super) fn analyze(
         module: &'a JsModuleIr,
         function_id: FunctionId,
         function: &'a JsFunctionIr,
