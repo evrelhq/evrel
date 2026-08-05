@@ -4,9 +4,11 @@ use evrel_js_ir::{
     ArrayLiteralElement, BinaryOperator, BindingId, BindingKind, BlockParameterSource,
     ClassElement, ClassFieldPlacement, DeleteTarget, FunctionId, JsFunctionIr, JsModuleIr,
     ObjectLiteralEntry, ObjectLiteralKey, OperationId, OperationKind, RegionId, RegionOwner,
-    TypeofTarget, UnaryOperator, ValueDefinition, ValueId,
+    TypeofTarget, UnaryOperator, ValueId,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+
+use super::super::direct_eval::is_direct_eval_call;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum EscapeNode {
@@ -532,40 +534,4 @@ fn insert_region_role(
         roles.insert(region, role).is_none(),
         "an inline region must have exactly one semantic role"
     );
-}
-
-fn is_direct_eval_call(
-    module: &JsModuleIr,
-    function: &JsFunctionIr,
-    operation: OperationId,
-) -> bool {
-    let Some(operation) = function.operation(operation) else {
-        return false;
-    };
-    let OperationKind::Call(call) = operation.kind() else {
-        return false;
-    };
-    let Some(callee) = call
-        .callee_operand_index()
-        .and_then(|index| operation.operands().get(index))
-    else {
-        return false;
-    };
-    let Some(ValueDefinition::OperationResult {
-        operation: callee_operation,
-        ..
-    }) = function.value(*callee).map(|value| value.definition())
-    else {
-        return false;
-    };
-
-    function
-        .operation(*callee_operation)
-        .is_some_and(|operation| match operation.kind() {
-            OperationKind::LoadGlobal(global) => global.name() == "eval",
-            OperationKind::LoadBinding(load) => module
-                .binding(load.binding())
-                .is_some_and(|binding| binding.name() == "eval"),
-            _ => false,
-        })
 }

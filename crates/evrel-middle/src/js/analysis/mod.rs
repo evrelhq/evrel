@@ -2,12 +2,14 @@
 
 mod binding_promotion;
 mod control_flow;
+mod direct_eval;
 mod dominance_frontier;
 mod dominator_tree;
 mod function_escape;
 mod function_value;
 mod module_function_reachability;
 mod operation_safety;
+mod program_call_graph;
 mod program_linkage;
 mod program_reachability;
 
@@ -19,5 +21,9 @@ pub use function_escape::{FunctionEscapeAnalysis, ValueEscape};
 pub use function_value::{AbstractValue, FunctionValueAnalysis, FunctionValueInputs, ValueTypeSet};
 pub use module_function_reachability::ModuleFunctionReachability;
 pub use operation_safety::is_safe_to_remove;
+pub use program_call_graph::{
+    CallSite, CallSiteId, CallSiteKind, CallTargetCompleteness, CallTargetSet, FunctionReference,
+    FunctionReferenceSite, ProgramCallGraph,
+};
 pub use program_linkage::{ImportedBindingTarget, ProgramLinkage};
 pub use program_reachability::ProgramReachability;
