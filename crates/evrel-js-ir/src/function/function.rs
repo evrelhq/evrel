@@ -5,11 +5,11 @@ use std::collections::{BTreeSet, HashSet};
 use crate::arena::Arena;
 use crate::{
     BasicBlockData, BindingId, BindingPattern, BlockId, BlockParameter, BlockParameterSource,
-    ConstantValue, ExceptionHandlerData, ExceptionHandlerId, FunctionId, FunctionKind,
+    BlockTarget, ConstantValue, ExceptionHandlerData, ExceptionHandlerId, FunctionId, FunctionKind,
     FunctionMode, FunctionParameter, FunctionParameterKind, FunctionProperties,
     LabeledStatementData, LabeledStatementId, LocationId, LoopOperation, MemoryEffects,
-    OperationData, OperationEffects, OperationId, OperationKind, RegionData, RegionId, RegionOwner,
-    UnwindTarget, ValueData, ValueDefinition, ValueId, ValueUse,
+    OperationData, OperationEffects, OperationId, OperationKind, OperationSuccessor, RegionData,
+    RegionId, RegionOwner, ValueData, ValueDefinition, ValueId, ValueType, ValueUse,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -158,16 +158,21 @@ impl JsFunctionIr {
     /// Returns an operation's intrinsic effects and effects from its owned regions.
     pub fn operation_effects(&self, id: OperationId) -> Option<OperationEffects> {
         let operation = self.operation(id)?;
-        let mut effects = operation.kind().intrinsic_effects();
 
-        for region in operation.regions() {
+        Some(self.operation_kind_effects(operation.kind()))
+    }
+
+    pub(crate) fn operation_kind_effects(&self, kind: &OperationKind) -> OperationEffects {
+        let mut effects = kind.intrinsic_effects();
+
+        for region in kind.regions() {
             effects = effects.union(
                 self.region_effects(region)
                     .expect("operation must reference a live region"),
             );
         }
 
-        Some(effects)
+        effects
     }
 
     /// Returns an operation's intrinsic memory effects and those of its owned regions.
@@ -358,11 +363,10 @@ impl JsFunctionIr {
     ) -> ValueId {
         let parameter_index =
             u32::try_from(self.parameters.len()).expect("function parameter count must fit in u32");
-        let value = self
-            .values
-            .alloc(ValueData::new(ValueDefinition::FunctionParameter {
-                parameter_index,
-            }));
+        let value = self.values.alloc(ValueData::new(
+            ValueDefinition::FunctionParameter { parameter_index },
+            ValueType::JsValue,
+        ));
 
         for region in target.regions() {
             self.regions
@@ -381,6 +385,7 @@ impl JsFunctionIr {
         &mut self,
         block: BlockId,
         source: BlockParameterSource,
+        ty: ValueType,
     ) -> ValueId {
         let parameter_index = {
             let block = self
@@ -391,12 +396,13 @@ impl JsFunctionIr {
             u32::try_from(block.parameters().len()).expect("block parameter count must fit in u32")
         };
 
-        let value = self
-            .values
-            .alloc(ValueData::new(ValueDefinition::BlockParameter {
+        let value = self.values.alloc(ValueData::new(
+            ValueDefinition::BlockParameter {
                 block,
                 parameter_index,
-            }));
+            },
+            ty,
+        ));
 
         self.blocks
             .get_mut(block)
@@ -536,11 +542,12 @@ impl JsFunctionIr {
             produced_count + arguments.len(),
             "successor arguments must match target block parameters",
         );
+        let produced_source = operation.produced_argument_source(successor_index);
         assert!(
             target_data.parameters()[..produced_count]
                 .iter()
-                .all(|parameter| parameter.source() == BlockParameterSource::Produced),
-            "successor-produced values must enter produced block parameters",
+                .all(|parameter| parameter.source() == produced_source),
+            "successor-produced values must enter matching block parameters",
         );
         assert!(
             target_data.parameters()[produced_count..]
@@ -554,6 +561,12 @@ impl JsFunctionIr {
                 .all(|argument| self.values.get(*argument).is_some()),
             "successor arguments must belong to the function",
         );
+        let replacement = OperationSuccessor::new(
+            BlockTarget::new(target, arguments.len()),
+            successor.argument_operand_range().start,
+        )
+        .with_produced_arguments(produced_count);
+        self.validate_successor_types(operation.kind(), successor_index, replacement, &arguments);
 
         let previous_operands = self
             .operations
@@ -1051,6 +1064,22 @@ impl JsFunctionIr {
             .get(operand_index)
             .expect("cannot replace an unknown operation operand");
 
+        let previous_type = self
+            .values
+            .get(previous)
+            .expect("existing operand must belong to the function")
+            .ty();
+        let replacement_type = self
+            .values
+            .get(replacement)
+            .expect("replacement operand must belong to the function")
+            .ty();
+
+        assert_eq!(
+            previous_type, replacement_type,
+            "replacement value type must match existing operand type",
+        );
+
         if previous == replacement {
             return false;
         }
@@ -1089,6 +1118,26 @@ impl JsFunctionIr {
             self.values.get(argument).is_some(),
             "successor argument must belong to the function",
         );
+
+        let (successor, mut arguments) = {
+            let data = self
+                .operations
+                .get(operation)
+                .expect("cannot edit an unknown operation");
+            let successor = *data
+                .successors()
+                .get(successor_index)
+                .expect("operation has no such successor");
+
+            (successor, successor.arguments(data.operands()).to_vec())
+        };
+
+        arguments.push(argument);
+        let data = self
+            .operations
+            .get(operation)
+            .expect("operation was validated above");
+        self.validate_successor_types(data.kind(), successor_index, successor, &arguments);
 
         let (operand_index, shifted_operands) = {
             let data = self
@@ -1204,7 +1253,11 @@ impl JsFunctionIr {
             .iter()
             .copied()
             .map(|block| {
-                let parameter = self.append_block_parameter(block, BlockParameterSource::Forwarded);
+                let parameter = self.append_block_parameter(
+                    block,
+                    BlockParameterSource::Forwarded,
+                    crate::ValueType::JsValue,
+                );
 
                 (block, parameter)
             })
@@ -1437,7 +1490,6 @@ impl JsFunctionIr {
         &mut self,
         block: BlockId,
         location: LocationId,
-        unwind_target: UnwindTarget,
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
     ) -> OperationId {
@@ -1456,7 +1508,7 @@ impl JsFunctionIr {
             "cannot append an operation after a block terminator"
         );
 
-        let operation = self.create_operation(block, location, unwind_target, kind, operands);
+        let operation = self.create_operation(block, location, kind, operands);
 
         self.blocks
             .get_mut(block)
@@ -1470,7 +1522,6 @@ impl JsFunctionIr {
         &mut self,
         block: BlockId,
         location: LocationId,
-        unwind_target: UnwindTarget,
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
     ) -> OperationId {
@@ -1486,7 +1537,7 @@ impl JsFunctionIr {
             "a block cannot have more than one terminator"
         );
 
-        let operation = self.create_operation(block, location, unwind_target, kind, operands);
+        let operation = self.create_operation(block, location, kind, operands);
 
         self.blocks
             .get_mut(block)
@@ -1500,7 +1551,6 @@ impl JsFunctionIr {
         &mut self,
         block: BlockId,
         location: LocationId,
-        unwind_target: UnwindTarget,
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
     ) -> OperationId {
@@ -1512,43 +1562,33 @@ impl JsFunctionIr {
             "operand count does not match operation kind"
         );
 
-        for operand in &operands {
+        for (operand_index, operand) in operands.iter().enumerate() {
             assert!(
                 self.values.get(*operand).is_some(),
                 "operation references an unknown value"
             );
+
+            if let Some(expected) = kind.fixed_operand_type(operand_index) {
+                let actual = self
+                    .values
+                    .get(*operand)
+                    .expect("operand was validated above")
+                    .ty();
+
+                assert_eq!(
+                    actual, expected,
+                    "fixed operation operand has the wrong value type"
+                );
+            }
         }
 
-        if let UnwindTarget::Handler(handler) = unwind_target {
-            let handler = self
-                .exception_handlers
-                .get(handler)
-                .expect("unwind handler must belong to the function");
-            let source_region = self
-                .block_region(block)
-                .expect("operation block must belong to a live region");
-            let handler_region = self
-                .block_region(handler.entry_block())
-                .expect("handler entry block must belong to a live region");
-            let mut region = Some(source_region);
-            let mut enters_same_or_ancestor_region = false;
-
-            while let Some(candidate) = region {
-                if candidate == handler_region {
-                    enters_same_or_ancestor_region = true;
-                    break;
-                }
-
-                region = self
-                    .regions
-                    .get(candidate)
-                    .expect("operation region must remain live")
-                    .parent();
-            }
-
-            assert!(
-                enters_same_or_ancestor_region,
-                "unwind handler must enter the operation's region or an ancestor"
+        let successors = kind.successors();
+        for (successor_index, successor) in successors.into_iter().enumerate() {
+            self.validate_successor_types(
+                &kind,
+                successor_index,
+                successor,
+                successor.arguments(&operands),
             );
         }
 
@@ -1561,13 +1601,9 @@ impl JsFunctionIr {
         }
 
         let result_count = kind.result_count();
-        let operation = self.operations.alloc(OperationData::new(
-            block,
-            location,
-            unwind_target,
-            kind,
-            operands.clone(),
-        ));
+        let operation =
+            self.operations
+                .alloc(OperationData::new(block, location, kind, operands.clone()));
 
         for region in regions {
             self.regions
@@ -1590,12 +1626,13 @@ impl JsFunctionIr {
             let result_index = u32::try_from(result_index)
                 .expect("an operation cannot have more than u32::MAX results");
 
-            let result = self
-                .values
-                .alloc(ValueData::new(ValueDefinition::OperationResult {
+            let result = self.values.alloc(ValueData::new(
+                ValueDefinition::OperationResult {
                     operation,
                     result_index,
-                }));
+                },
+                ValueType::JsValue,
+            ));
 
             self.operations
                 .get_mut(operation)
@@ -1605,6 +1642,63 @@ impl JsFunctionIr {
 
         operation
     }
+
+    fn validate_successor_types(
+        &self,
+        kind: &OperationKind,
+        successor_index: usize,
+        successor: OperationSuccessor,
+        arguments: &[ValueId],
+    ) {
+        let parameters = self
+            .blocks
+            .get(successor.target().block())
+            .expect("successor target must belong to the function")
+            .parameters();
+        let (produced, forwarded) = parameters
+            .split_at_checked(successor.produced_argument_count())
+            .expect("successor produces too many block arguments");
+
+        for (produced_index, parameter) in produced.iter().enumerate() {
+            let expected = kind
+                .produced_argument_type(successor_index, produced_index)
+                .expect("operation must define the type of every produced argument");
+            let actual = self
+                .values
+                .get(parameter.value())
+                .expect("block parameter value must remain live")
+                .ty();
+
+            assert_eq!(
+                actual, expected,
+                "produced argument type must match block parameter type",
+            );
+        }
+
+        assert_eq!(
+            arguments.len(),
+            forwarded.len(),
+            "successor arguments must match forwarded block parameters",
+        );
+
+        for (&argument, parameter) in arguments.iter().zip(forwarded) {
+            let argument_type = self
+                .values
+                .get(argument)
+                .expect("successor argument must belong to the function")
+                .ty();
+            let parameter_type = self
+                .values
+                .get(parameter.value())
+                .expect("block parameter value must remain live")
+                .ty();
+
+            assert_eq!(
+                argument_type, parameter_type,
+                "successor argument type must match block parameter type",
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1613,7 +1707,7 @@ mod tests {
     use crate::{
         ArrayLiteralElement, ArrayLiteralOp, ConstantOp, ConstantValue, DebuggerOp, FunctionId,
         FunctionKind, FunctionMode, FunctionProperties, LocationId, MemoryEffects,
-        OperationEffects, OperationKind, RegionOwner, RegionYieldOp, UnwindTarget,
+        OperationEffects, OperationKind, RegionOwner, RegionYieldOp,
     };
 
     #[test]
@@ -1660,7 +1754,6 @@ mod tests {
         function.append_operation(
             expression_block,
             LocationId::UNKNOWN,
-            UnwindTarget::Propagate,
             OperationKind::Debugger(DebuggerOp::new()),
             [],
         );
@@ -1668,7 +1761,6 @@ mod tests {
         let value_operation = function.append_operation(
             expression_block,
             LocationId::UNKNOWN,
-            UnwindTarget::Propagate,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
         );
@@ -1677,7 +1769,6 @@ mod tests {
         function.set_terminator(
             expression_block,
             LocationId::UNKNOWN,
-            UnwindTarget::Propagate,
             OperationKind::RegionYield(RegionYieldOp::new(1)),
             [value],
         );
@@ -1685,7 +1776,6 @@ mod tests {
         let array = function.append_operation(
             function.entry_block(),
             LocationId::UNKNOWN,
-            UnwindTarget::Propagate,
             OperationKind::ArrayLiteral(ArrayLiteralOp::new([ArrayLiteralElement::Value {
                 expression,
             }])),

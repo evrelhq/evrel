@@ -6,13 +6,15 @@ use super::{BlockTarget, OperationEffects, OperationSuccessor};
 
 /// Preserves one source-level `try` statement.
 ///
-/// Exceptional transfer is represented separately by function exception-handler
-/// metadata. This operation retains the structure needed for JavaScript codegen.
+/// Executable exceptional and completion transfers are represented by explicit
+/// successors. This operation retains the source structure needed for direct
+/// JavaScript `try`/`catch`/`finally` emission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TryOp {
     pub(super) try_target: BlockTarget,
     catch_block: Option<BlockId>,
     finally_block: Option<BlockId>,
+    finally_exception_block: Option<BlockId>,
     completion_block: BlockId,
 }
 
@@ -21,17 +23,24 @@ impl TryOp {
         try_target: BlockTarget,
         catch_block: Option<BlockId>,
         finally_block: Option<BlockId>,
+        finally_exception_block: Option<BlockId>,
         completion_block: BlockId,
     ) -> Self {
         assert!(
             catch_block.is_some() || finally_block.is_some(),
             "try must have a catch or finally clause"
         );
+        assert_eq!(
+            finally_exception_block.is_some(),
+            finally_block.is_some(),
+            "finally exception entry must accompany a finally block",
+        );
 
         Self {
             try_target,
             catch_block,
             finally_block,
+            finally_exception_block,
             completion_block,
         }
     }
@@ -48,6 +57,12 @@ impl TryOp {
         self.finally_block
     }
 
+    /// Returns the compiler-created entry that turns an exception into a
+    /// pending throw completion for the finalizer.
+    pub const fn finally_exception_block(&self) -> Option<BlockId> {
+        self.finally_exception_block
+    }
+
     pub const fn completion_block(&self) -> BlockId {
         self.completion_block
     }
@@ -62,6 +77,7 @@ impl TryOp {
         self.catch_block
             .into_iter()
             .chain(self.finally_block)
+            .chain(self.finally_exception_block)
             .chain([self.completion_block])
             .collect()
     }
@@ -95,16 +111,26 @@ mod tests {
             BlockTarget::new(try_block, 0),
             Some(catch_block),
             Some(finally_block),
+            Some(BlockId::from_index(5)),
             completion_block,
         );
 
         assert_eq!(operation.try_target().block(), try_block);
         assert_eq!(operation.catch_block(), Some(catch_block));
         assert_eq!(operation.finally_block(), Some(finally_block));
+        assert_eq!(
+            operation.finally_exception_block(),
+            Some(BlockId::from_index(5))
+        );
         assert_eq!(operation.completion_block(), completion_block);
         assert_eq!(
             operation.structural_blocks(),
-            [catch_block, finally_block, completion_block]
+            [
+                catch_block,
+                finally_block,
+                BlockId::from_index(5),
+                completion_block,
+            ]
         );
         assert_eq!(operation.successors().len(), 1);
         assert_eq!(operation.operand_count(), 0);
@@ -116,6 +142,7 @@ mod tests {
     fn rejects_try_without_a_handler() {
         TryOp::new(
             BlockTarget::new(BlockId::from_index(1), 0),
+            None,
             None,
             None,
             BlockId::from_index(2),

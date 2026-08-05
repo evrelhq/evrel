@@ -141,8 +141,8 @@ impl<'ir> FunctionEditor<'ir> {
 mod tests {
     use crate::{
         BinaryOp, BinaryOperator, BlockParameterSource, BlockTarget, ConstantOp, ConstantValue,
-        IfOp, JsModuleIr, JumpOp, ModuleBuilder, OperationKind, ReturnOp, UnwindTarget,
-        ValueDefinition,
+        IfOp, JsModuleIr, JumpOp, ModuleBuilder, OperationKind, ReturnOp, ValueDefinition,
+        ValueType,
     };
 
     use super::FunctionEditor;
@@ -159,21 +159,18 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let original = builder.operation_results(original)[0];
             let replacement = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(2.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let replacement = builder.operation_results(replacement)[0];
             let binary = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::StrictEqual)),
                 [original, original],
-                UnwindTarget::Propagate,
             );
 
             (original, replacement, binary)
@@ -198,6 +195,49 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "replacement value type must match existing operand type")]
+    fn rejects_replacing_an_operand_with_a_different_value_type() {
+        let mut module = JsModuleIr::new();
+        let function_id = module.entry_function();
+
+        let (completion, js_value) = {
+            let mut module_builder = ModuleBuilder::new(&mut module);
+            let mut builder = module_builder.function_builder(function_id);
+            let entry = builder.current_block();
+            let completion = builder.append_block_parameter(
+                entry,
+                BlockParameterSource::Forwarded,
+                ValueType::Completion,
+            );
+            let target = builder.create_block();
+            builder.append_block_parameter(
+                target,
+                BlockParameterSource::Forwarded,
+                ValueType::Completion,
+            );
+
+            let constant = builder.append_operation(
+                crate::LocationId::UNKNOWN,
+                OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
+                [],
+            );
+            let js_value = builder.operation_results(constant)[0];
+
+            builder.terminate(
+                crate::LocationId::UNKNOWN,
+                OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 1))),
+                [completion],
+            );
+
+            (completion, js_value)
+        };
+
+        let function = module.function_mut(function_id).unwrap();
+        let mut editor = FunctionEditor::new(function);
+        editor.replace_all_uses(completion, js_value);
+    }
+
+    #[test]
     fn replaces_an_operation_with_a_constant_without_changing_its_result() {
         let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
@@ -212,7 +252,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(20.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let left = builder.operation_results(left_operation)[0];
 
@@ -220,7 +259,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(22.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let right = builder.operation_results(right_operation)[0];
 
@@ -228,7 +266,6 @@ mod tests {
                 location,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
-                UnwindTarget::Propagate,
             );
             let result = builder.operation_results(operation)[0];
 
@@ -236,7 +273,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
-                UnwindTarget::Propagate,
             );
 
             (left, right, operation, result, return_operation, location)
@@ -278,7 +314,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let source = builder.operation_results(source)[0];
 
@@ -286,7 +321,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::StrictEqual)),
                 [source, source],
-                UnwindTarget::Propagate,
             );
             let first_result = builder.operation_results(first)[0];
 
@@ -294,7 +328,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::StrictEqual)),
                 [first_result, first_result],
-                UnwindTarget::Propagate,
             );
             let second_result = builder.operation_results(second)[0];
 
@@ -331,7 +364,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
@@ -342,7 +374,6 @@ mod tests {
                     join,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(left);
@@ -350,14 +381,12 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let left_value = builder.operation_results(left_value)[0];
             let left_jump = builder.terminate(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(right);
@@ -365,14 +394,12 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(2.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let right_value = builder.operation_results(right_value)[0];
             let right_jump = builder.terminate(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (
@@ -432,35 +459,39 @@ mod tests {
             let right = builder.create_block();
             let completion = builder.create_block();
 
-            builder.append_block_parameter(left, BlockParameterSource::Forwarded);
-            builder.append_block_parameter(right, BlockParameterSource::Forwarded);
+            builder.append_block_parameter(
+                left,
+                BlockParameterSource::Forwarded,
+                crate::ValueType::JsValue,
+            );
+            builder.append_block_parameter(
+                right,
+                BlockParameterSource::Forwarded,
+                crate::ValueType::JsValue,
+            );
 
             let condition = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             let left_argument = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let left_argument = builder.operation_results(left_argument)[0];
             let added_argument = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(2.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let added_argument = builder.operation_results(added_argument)[0];
             let right_argument = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(3.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let right_argument = builder.operation_results(right_argument)[0];
             let terminator = builder.terminate(
@@ -471,7 +502,6 @@ mod tests {
                     completion,
                 )),
                 [condition, left_argument, right_argument],
-                UnwindTarget::Propagate,
             );
 
             (
@@ -535,14 +565,12 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(0.0))),
                 [],
-                UnwindTarget::Propagate,
             );
             let entry_value = builder.operation_results(entry_value)[0];
             let entry_jump = builder.terminate(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(first, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(first);
@@ -550,7 +578,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(second, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(second);
@@ -558,7 +585,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(first, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (
@@ -634,10 +660,16 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function);
             let join = builder.create_block();
-            let first_parameter =
-                builder.append_block_parameter(join, BlockParameterSource::Forwarded);
-            let second_parameter =
-                builder.append_block_parameter(join, BlockParameterSource::Forwarded);
+            let first_parameter = builder.append_block_parameter(
+                join,
+                BlockParameterSource::Forwarded,
+                crate::ValueType::JsValue,
+            );
+            let second_parameter = builder.append_block_parameter(
+                join,
+                BlockParameterSource::Forwarded,
+                crate::ValueType::JsValue,
+            );
 
             let condition = append_number(&mut builder, 0.0);
             let first_then = append_number(&mut builder, 1.0);
@@ -652,7 +684,6 @@ mod tests {
                     join,
                 )),
                 [condition, first_then, second_then, first_else, second_else],
-                UnwindTarget::Propagate,
             );
 
             (
@@ -706,7 +737,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]

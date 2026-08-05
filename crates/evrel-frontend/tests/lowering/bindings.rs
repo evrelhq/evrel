@@ -96,7 +96,7 @@ fn lowers_a_simple_array_binding_pattern() {
         concat!(
             "bb0:\n",
             "  %0 = load_global \"source\"\n",
-            "  destructure_binding.initialize [@0, _, @1], %0",
+            "  %1, %2 = destructure_binding.initialize [@0, _, @1], %0",
         )
     );
 }
@@ -110,7 +110,7 @@ fn lowers_an_array_rest_binding() {
         concat!(
             "bb0:\n",
             "  %0 = load_global \"source\"\n",
-            "  destructure_binding.initialize [@0, ...@1], %0",
+            "  %1, %2 = destructure_binding.initialize [@0, ...@1], %0",
         )
     );
 }
@@ -125,7 +125,7 @@ fn lowers_a_static_object_binding_pattern() {
         concat!(
             "bb0:\n",
             "  %0 = load_global \"value\"\n",
-            "  destructure_binding.initialize ",
+            "  %1, %2, %3 = destructure_binding.initialize ",
             "{\"first\": @0, \"source\": @1, ...@2}, %0",
         )
     );
@@ -166,7 +166,7 @@ fn lowers_nested_binding_patterns() {
         concat!(
             "bb0:\n",
             "  %0 = load_global \"source\"\n",
-            "  destructure_binding.initialize ",
+            "  %1, %2 = destructure_binding.initialize ",
             "{\"pair\": [@0, _, ...@1]}, %0",
         )
     );

@@ -1,6 +1,6 @@
 //! Ordinary control flow within one IR region.
 
-use evrel_js_ir::{BlockId, JsFunctionIr, OperationId, RegionId, UnwindTarget};
+use evrel_js_ir::{BlockId, JsFunctionIr, OperationId, RegionId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Identifies one executable edge in a regional CFG.
@@ -41,21 +41,10 @@ impl ControlFlowEdge {
     }
 }
 
-/// Why an ordinary regional CFG cannot be constructed soundly.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RegionControlFlowError {
-    /// A potentially throwing operation transfers to a local handler.
-    ///
-    /// Exception lowering must make that transfer explicit before analyses
-    /// such as SSA construction can include it.
-    LocalExceptionNotLowered { operation: OperationId },
-}
-
 /// Ordinary executable control flow within one region.
 ///
-/// This graph deliberately excludes structured ownership and implicit
-/// exceptional transfer. Until exception lowering is implemented, regions
-/// containing locally handled throwing operations are rejected.
+/// This graph deliberately excludes structured ownership. Locally handled
+/// exceptions are ordinary explicit terminator successors.
 #[derive(Debug, Clone)]
 pub struct RegionControlFlowGraph {
     region: RegionId,
@@ -70,10 +59,7 @@ pub struct RegionControlFlowGraph {
 
 impl RegionControlFlowGraph {
     /// Computes ordinary control flow for one region.
-    pub fn compute(
-        function: &JsFunctionIr,
-        region: RegionId,
-    ) -> Result<Self, RegionControlFlowError> {
+    pub fn compute(function: &JsFunctionIr, region: RegionId) -> Self {
         let region_data = function
             .region(region)
             .expect("control-flow analysis requires a live region");
@@ -87,30 +73,6 @@ impl RegionControlFlowGraph {
         for &block in &blocks {
             predecessor_edges.insert(block, Vec::new());
             successor_edges.insert(block, Vec::new());
-
-            let block_data = function
-                .block(block)
-                .expect("region must reference a live block");
-
-            for operation in block_data
-                .operations()
-                .iter()
-                .copied()
-                .chain(block_data.terminator())
-            {
-                let data = function
-                    .operation(operation)
-                    .expect("block must reference a live operation");
-
-                let may_throw = function
-                    .operation_effects(operation)
-                    .expect("operation must belong to the function")
-                    .may_throw();
-
-                if may_throw && matches!(data.unwind_target(), UnwindTarget::Handler(_)) {
-                    return Err(RegionControlFlowError::LocalExceptionNotLowered { operation });
-                }
-            }
         }
 
         for &source in &blocks {
@@ -159,7 +121,7 @@ impl RegionControlFlowGraph {
         let (reachable, reverse_postorder) =
             compute_reverse_postorder(entry, &edges, &successor_edges);
 
-        Ok(Self {
+        Self {
             region,
             entry,
             blocks,
@@ -168,7 +130,7 @@ impl RegionControlFlowGraph {
             successor_edges,
             reachable,
             reverse_postorder,
-        })
+        }
     }
 
     /// Returns the represented region.

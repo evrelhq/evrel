@@ -232,14 +232,31 @@ impl RegionYieldOp {
 
 /// Throws a JavaScript value.
 ///
-/// This operation has one operand and terminates the current block.
+/// This operation has one operand and terminates the current block. When the
+/// exception is handled in the current region, `exception_target` makes that
+/// control transfer explicit. Otherwise, the exception propagates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ThrowOp;
+pub struct ThrowOp {
+    pub(super) exception_target: Option<BlockTarget>,
+}
 
 impl ThrowOp {
     /// Creates a throw operation.
-    pub const fn new() -> Self {
-        Self
+    pub const fn new(exception_target: Option<BlockTarget>) -> Self {
+        Self { exception_target }
+    }
+
+    /// Returns the local exception destination, or `None` when the exception
+    /// propagates from the current region.
+    pub const fn exception_target(&self) -> Option<BlockTarget> {
+        self.exception_target
+    }
+
+    pub(crate) fn successors(&self) -> Vec<OperationSuccessor> {
+        self.exception_target
+            .map(|target| OperationSuccessor::new(target, 1).with_produced_arguments(1))
+            .into_iter()
+            .collect()
     }
 
     pub(crate) const fn operand_count(&self) -> usize {
@@ -253,7 +270,7 @@ impl ThrowOp {
 
 impl Default for ThrowOp {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
@@ -325,7 +342,7 @@ mod tests {
 
     #[test]
     fn defines_the_throw_shape() {
-        let operation = ThrowOp::new();
+        let operation = ThrowOp::new(None);
 
         assert_eq!(operation.operand_count(), 1);
         assert_eq!(operation.result_count(), 0);

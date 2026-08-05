@@ -6,11 +6,13 @@ pub(super) fn plan_sequence<'function>(
     start: BlockId,
     stop: Option<BlockId>,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<JsControlSequence, JsCodegenError> {
     let function_id = context.function_id;
     let function = context.function;
     let structures = &context.structures;
+    let active_controls = scope.active_controls;
+    let active_exception_target = scope.exception_target;
 
     let mut steps = Vec::new();
     let mut current = start;
@@ -43,7 +45,7 @@ pub(super) fn plan_sequence<'function>(
                 current,
                 Some(completion),
                 visited,
-                &nested_controls,
+                scope.with_controls(&nested_controls),
             )?;
 
             steps.push(JsControlStep::Labeled {
@@ -70,7 +72,7 @@ pub(super) fn plan_sequence<'function>(
                     operation_block,
                     operation,
                     visited,
-                    active_controls,
+                    scope,
                 )?,
                 LoopOperation::DoWhile {
                     operation_block,
@@ -82,7 +84,7 @@ pub(super) fn plan_sequence<'function>(
                     operation_block,
                     operation,
                     visited,
-                    active_controls,
+                    scope,
                 )?,
                 LoopOperation::For {
                     operation_block,
@@ -94,7 +96,7 @@ pub(super) fn plan_sequence<'function>(
                     operation_block,
                     operation,
                     visited,
-                    active_controls,
+                    scope,
                 )?,
                 LoopOperation::ForIn {
                     operation_block,
@@ -105,7 +107,7 @@ pub(super) fn plan_sequence<'function>(
                     current,
                     IteratorOperation::ForIn(operation),
                     visited,
-                    active_controls,
+                    scope,
                 )?,
                 LoopOperation::ForOf {
                     operation_block,
@@ -116,7 +118,7 @@ pub(super) fn plan_sequence<'function>(
                     current,
                     IteratorOperation::ForOf(operation),
                     visited,
-                    active_controls,
+                    scope,
                 )?,
                 LoopOperation::ForIn { .. } | LoopOperation::ForOf { .. } => {
                     return Err(JsCodegenError::UnsupportedControlFlow {
@@ -147,9 +149,13 @@ pub(super) fn plan_sequence<'function>(
             .iter()
             .any(|parameter| match parameter.source() {
                 BlockParameterSource::Forwarded => false,
-                BlockParameterSource::Produced => !active_controls
-                    .iter()
-                    .any(|control| control.produced_block == Some(current)),
+                BlockParameterSource::Produced => {
+                    !structures.is_invoke_normal_entry(current)
+                        && !structures.is_completion_entry(current)
+                        && !active_controls
+                            .iter()
+                            .any(|control| control.produced_block == Some(current))
+                }
                 BlockParameterSource::Exception => !structures.is_exception_entry(current),
             })
         {
@@ -159,7 +165,9 @@ pub(super) fn plan_sequence<'function>(
             });
         }
 
-        steps.push(JsControlStep::Block(current));
+        steps.push(JsControlStep::Operations(
+            block.operations().to_vec().into_boxed_slice(),
+        ));
 
         let Some(terminator_id) = block.terminator() else {
             if stop.is_some() {
@@ -178,6 +186,40 @@ pub(super) fn plan_sequence<'function>(
                 .ok_or(JsCodegenError::UnknownOperation {
                     operation: terminator_id,
                 })?;
+
+        if matches!(terminator.kind(), OperationKind::Invoke(_)) {
+            let successors = terminator.successors();
+            let [normal, exception] = successors.as_slice() else {
+                return Err(JsCodegenError::MalformedOperation {
+                    operation: terminator_id,
+                });
+            };
+
+            if Some(exception.target().block()) != active_exception_target {
+                return Err(JsCodegenError::UnsupportedControlFlow {
+                    function: function_id,
+                    reason: concat!(file!(), ":", line!()),
+                });
+            }
+
+            let normal_edge = JsEdgeKey::new(terminator_id, 0);
+            steps.push(JsControlStep::Operations(Box::new([terminator_id])));
+            steps.push(JsControlStep::Edge(normal_edge));
+            let target = normal.target().block();
+
+            if Some(target) == stop {
+                current = target;
+                continue;
+            }
+
+            if let Some(transfer) = structured_transfer(target, active_controls) {
+                steps.push(transfer);
+                break;
+            }
+
+            current = target;
+            continue;
+        }
 
         match terminator.kind() {
             OperationKind::Jump(jump) => {
@@ -229,7 +271,7 @@ pub(super) fn plan_sequence<'function>(
                     branch.then_target().block(),
                     Some(completion),
                     visited,
-                    active_controls,
+                    scope,
                 )?;
                 let else_branch = plan_successor_sequence(
                     context,
@@ -238,7 +280,7 @@ pub(super) fn plan_sequence<'function>(
                     branch.else_target().block(),
                     Some(completion),
                     visited,
-                    active_controls,
+                    scope,
                 )?;
 
                 steps.push(JsControlStep::If {
@@ -259,7 +301,7 @@ pub(super) fn plan_sequence<'function>(
                     terminator_id,
                     operation,
                     visited,
-                    active_controls,
+                    scope,
                 )?));
                 current = completion;
             }
@@ -272,12 +314,133 @@ pub(super) fn plan_sequence<'function>(
                     terminator_id,
                     operation,
                     visited,
-                    active_controls,
+                    scope,
                 )?));
                 current = completion;
             }
 
-            OperationKind::Return(_) | OperationKind::Throw(_) => break,
+            OperationKind::EnterFinally(operation) => {
+                let successors = terminator.successors();
+                let [successor] = successors.as_slice() else {
+                    return Err(JsCodegenError::MalformedOperation {
+                        operation: terminator_id,
+                    });
+                };
+
+                if !structures.is_completion_entry(successor.target().block())
+                    || successor.target().argument_count() != 0
+                {
+                    return Err(JsCodegenError::UnsupportedControlFlow {
+                        function: function_id,
+                        reason: concat!(file!(), ":", line!()),
+                    });
+                }
+
+                match operation.kind() {
+                    evrel_js_ir::CompletionKind::Normal => {}
+                    evrel_js_ir::CompletionKind::Return => {
+                        let [value] = terminator.operation_operands() else {
+                            return Err(JsCodegenError::MalformedOperation {
+                                operation: terminator_id,
+                            });
+                        };
+                        steps.push(JsControlStep::Return { value: *value });
+                    }
+                    evrel_js_ir::CompletionKind::Throw => {
+                        let [value] = terminator.operation_operands() else {
+                            return Err(JsCodegenError::MalformedOperation {
+                                operation: terminator_id,
+                            });
+                        };
+                        steps.push(JsControlStep::Throw { value: *value });
+                    }
+                    evrel_js_ir::CompletionKind::Break(target) => {
+                        let Some(transfer @ JsControlStep::Break { .. }) =
+                            structured_transfer(target, active_controls)
+                        else {
+                            return Err(JsCodegenError::UnsupportedControlFlow {
+                                function: function_id,
+                                reason: concat!(file!(), ":", line!()),
+                            });
+                        };
+                        steps.push(transfer);
+                    }
+                    evrel_js_ir::CompletionKind::Continue(target) => {
+                        let Some(transfer @ JsControlStep::Continue { .. }) =
+                            structured_transfer(target, active_controls)
+                        else {
+                            return Err(JsCodegenError::UnsupportedControlFlow {
+                                function: function_id,
+                                reason: concat!(file!(), ":", line!()),
+                            });
+                        };
+                        steps.push(transfer);
+                    }
+                }
+
+                break;
+            }
+
+            OperationKind::ResumeCompletion(operation) => {
+                let Some(completion) = stop else {
+                    return Err(JsCodegenError::UnsupportedControlFlow {
+                        function: function_id,
+                        reason: concat!(file!(), ":", line!()),
+                    });
+                };
+                let mut has_normal_case = false;
+
+                for case in operation.cases() {
+                    if case.kind() == evrel_js_ir::CompletionKind::Normal {
+                        if case.target().block() != completion {
+                            return Err(JsCodegenError::UnsupportedControlFlow {
+                                function: function_id,
+                                reason: concat!(file!(), ":", line!()),
+                            });
+                        }
+                        has_normal_case = true;
+                    }
+                }
+
+                if !has_normal_case {
+                    return Err(JsCodegenError::MalformedOperation {
+                        operation: terminator_id,
+                    });
+                }
+
+                break;
+            }
+
+            OperationKind::Throw(operation) => {
+                if operation.exception_target().is_some() {
+                    let successors = terminator.successors();
+                    let [exception] = successors.as_slice() else {
+                        return Err(JsCodegenError::MalformedOperation {
+                            operation: terminator_id,
+                        });
+                    };
+
+                    if Some(exception.target().block()) != active_exception_target {
+                        return Err(JsCodegenError::UnsupportedControlFlow {
+                            function: function_id,
+                            reason: concat!(file!(), ":", line!()),
+                        });
+                    }
+                }
+
+                steps.push(JsControlStep::Operations(Box::new([terminator_id])));
+                break;
+            }
+
+            OperationKind::Return(_) => {
+                if !matches!(
+                    function.kind(),
+                    evrel_js_ir::FunctionKind::Module | evrel_js_ir::FunctionKind::ClassStaticBlock
+                ) {
+                    steps.push(JsControlStep::Operations(Box::new([terminator_id])));
+                }
+                break;
+            }
 
             _ => {
                 return Err(JsCodegenError::UnsupportedControlFlow {
@@ -298,15 +461,15 @@ pub(super) fn plan_successor_sequence<'function>(
     target: BlockId,
     stop: Option<BlockId>,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<JsControlSequence, JsCodegenError> {
-    if let Some(transfer) = structured_transfer(target, active_controls) {
+    if let Some(transfer) = structured_transfer(target, scope.active_controls) {
         return Ok(JsControlSequence {
             steps: vec![JsControlStep::Edge(edge), transfer],
         });
     }
 
-    let mut sequence = plan_sequence(context, locals, target, stop, visited, active_controls)?;
+    let mut sequence = plan_sequence(context, locals, target, stop, visited, scope)?;
     sequence.prepend_edge(edge);
 
     Ok(sequence)

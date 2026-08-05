@@ -29,7 +29,7 @@ fn lowers_try_catch_with_an_exception_parameter() {
             "handler @0 catch entry: bb2\n",
             "\n",
             "region @1 results: 1, parent: region @0, owner: op @8\n",
-            "bb4:\n",
+            "bb6:\n",
             "  %4 = load_binding @0\n",
             "  region_yield %4\n",
             "\n",
@@ -47,11 +47,68 @@ fn lowers_try_catch_with_an_exception_parameter() {
             "  jump bb1\n",
             "\n",
             "bb3:\n",
-            "  %1 = load_global \"work\" [unwind: @0]\n",
-            "  %2 = call %1, args: [] [unwind: @0]\n",
-            "  jump bb1 [unwind: @0]",
+            "  invoke load_global \"work\", normal: bb4, exception: bb2\n",
+            "\n",
+            "bb4(%1 [produced]):\n",
+            "  invoke call %1, args: [], normal: bb5, exception: bb2\n",
+            "\n",
+            "bb5(%2 [produced]):\n",
+            "  jump bb1",
         )
     );
+}
+
+#[test]
+fn makes_locally_handled_throwing_operations_explicit() {
+    let module = lower_javascript_module("try { object[key]; } catch (error) {}").unwrap();
+    let output = print_entry_function(&module);
+
+    assert!(
+        output.contains("invoke load_global \"object\", normal:"),
+        "{output}",
+    );
+    assert!(
+        output.contains("invoke load_global \"key\", normal:"),
+        "{output}",
+    );
+    assert!(output.contains("invoke load_property"), "{output}");
+    assert!(output.contains("exception: bb2"), "{output}");
+}
+
+#[test]
+fn makes_a_locally_caught_throw_edge_explicit() {
+    let module =
+        lower_javascript_module("try { throw error; } catch (caught) { use(caught); }").unwrap();
+    let output = print_entry_function(&module);
+
+    assert!(output.contains("throw %1, exception: bb2"), "{output}");
+    assert!(output.contains("bb2(%0 [exception]):"), "{output}");
+}
+
+#[test]
+fn lifts_region_exceptions_to_the_owning_operation() {
+    let module = lower_javascript_module("try { [possiblyMissing]; } catch (error) {}").unwrap();
+    let output = print_entry_function(&module);
+
+    assert!(
+        output.contains("invoke array_literal [region @1], normal:"),
+        "{output}",
+    );
+    assert!(output.contains("exception: bb2"), "{output}");
+
+    let region = output
+        .split("region @1")
+        .nth(1)
+        .expect("array element region must be printed")
+        .split("bb0:")
+        .next()
+        .expect("function body must follow the inline region");
+
+    assert!(
+        region.contains("load_global \"possiblyMissing\""),
+        "{output}"
+    );
+    assert!(!region.contains("[unwind:"), "{output}");
 }
 
 #[test]
@@ -123,6 +180,52 @@ fn lowers_try_finally() {
     assert!(output.contains("catch: none"));
     assert!(output.contains("finally: bb"));
     assert!(output.contains("load_global \"cleanup\""));
+    assert!(output.contains("enter_finally normal, target:"));
+    assert!(output.contains("enter_finally throw %"));
+    assert!(output.contains("resume_completion %"));
+}
+
+#[test]
+fn models_return_and_throw_completions_through_finally() {
+    let module = lower_javascript_module(
+        "function returns() { try { return 1; } finally { cleanup(); } }\n\
+         function throws() { try { throw error; } finally { cleanup(); } }",
+    )
+    .unwrap();
+    let output = print_module(&module);
+
+    assert!(output.contains("enter_finally return %"), "{output}");
+    assert!(output.contains("enter_finally throw %"), "{output}");
+    assert!(output.contains("resume_completion %"), "{output}");
+    assert!(output.contains("return: bb"), "{output}");
+    assert!(output.contains("throw: bb"), "{output}");
+}
+
+#[test]
+fn models_break_and_continue_completions_through_finally() {
+    let module = lower_javascript_module(
+        "outer: for (;;) {\n\
+           try { if (condition) break outer; continue outer; }\n\
+           finally { cleanup(); }\n\
+         }",
+    )
+    .unwrap();
+    let output = print_entry_function(&module);
+
+    assert!(output.contains("enter_finally break bb"), "{output}");
+    assert!(output.contains("enter_finally continue bb"), "{output}");
+    assert!(output.contains("resume_completion %"), "{output}");
+}
+
+#[test]
+fn keeps_a_loop_local_break_inside_the_try() {
+    let module = lower_javascript_module(
+        "try { while (condition) { break; } afterLoop(); } finally { cleanup(); }",
+    )
+    .unwrap();
+    let output = print_entry_function(&module);
+
+    assert!(!output.contains("enter_finally break bb"), "{output}");
 }
 
 #[test]

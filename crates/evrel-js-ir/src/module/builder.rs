@@ -202,7 +202,6 @@ mod tests {
                     crate::LocationId::UNKNOWN,
                     OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                     [],
-                    crate::UnwindTarget::Propagate,
                 );
             }
 

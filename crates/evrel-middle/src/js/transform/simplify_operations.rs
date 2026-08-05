@@ -14,11 +14,8 @@ use crate::js::work_queue::WorkQueue;
 /// regrouping belongs to reassociation. This pass only applies bounded local
 /// rewrites and immediately revisits affected users.
 ///
-/// Returns zero when the function's value flow cannot be modeled soundly.
 pub fn simplify_operations(function: &mut JsFunctionIr) -> usize {
-    let Ok(values) = FunctionValueAnalysis::compute(function) else {
-        return 0;
-    };
+    let values = FunctionValueAnalysis::compute(function);
 
     let mut work = WorkQueue::new();
 
@@ -274,7 +271,7 @@ fn is_number(function: &JsFunctionIr, value: ValueId, expected: f64) -> bool {
 mod tests {
     use evrel_js_ir::{
         BinaryOp, BinaryOperator, ConstantOp, ConstantValue, JsModuleIr, LoadGlobalOp,
-        ModuleBuilder, OperationKind, ReturnOp, UnaryOp, UnaryOperator, UnwindTarget, ValueId,
+        ModuleBuilder, OperationKind, ReturnOp, UnaryOp, UnaryOperator, ValueId,
     };
 
     use super::simplify_operations;
@@ -298,7 +295,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [second_result],
-                UnwindTarget::Propagate,
             );
 
             (first, second, returned, number)
@@ -336,21 +332,18 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
                 [boolean],
-                UnwindTarget::Propagate,
             );
             let inner_result = builder.operation_results(inner)[0];
             let outer = builder.append_operation(
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
                 [inner_result],
-                UnwindTarget::Propagate,
             );
             let outer_result = builder.operation_results(outer)[0];
             let returned = builder.terminate(
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [outer_result],
-                UnwindTarget::Propagate,
             );
 
             (inner, outer, returned, boolean)
@@ -385,7 +378,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
-                UnwindTarget::Propagate,
             );
 
             addition
@@ -428,7 +420,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
-                UnwindTarget::Propagate,
             );
 
             (boolean_equality, number_equality)
@@ -458,7 +449,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new(name)),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]
@@ -469,7 +459,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]
@@ -484,7 +473,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(operator)),
             [operand],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]
@@ -500,7 +488,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(operator)),
             [left, right],
-            UnwindTarget::Propagate,
         );
 
         (operation, builder.operation_results(operation)[0])

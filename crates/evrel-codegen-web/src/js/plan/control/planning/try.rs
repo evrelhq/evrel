@@ -1,12 +1,12 @@
 use super::*;
 
-pub(super) fn plan_try(
-    context: &ControlPlanningContext<'_>,
+pub(super) fn plan_try<'function>(
+    context: &ControlPlanningContext<'function>,
     locals: &mut JsLocalAllocator,
     terminator_id: OperationId,
     operation: &evrel_js_ir::TryOp,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'_>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<JsTryPlan, JsCodegenError> {
     let function_id = context.function_id;
     let function = context.function;
@@ -26,13 +26,17 @@ pub(super) fn plan_try(
     let normal_target = operation
         .finally_block()
         .unwrap_or(operation.completion_block());
+    let protected_exception_target = operation
+        .catch_block()
+        .or(operation.finally_exception_block())
+        .or(scope.exception_target);
     let mut try_body = plan_sequence(
         context,
         locals,
         operation.try_target().block(),
         Some(normal_target),
         visited,
-        active_controls,
+        scope.with_exception_target(protected_exception_target),
     )?;
     try_body.prepend_edge(JsEdgeKey::new(terminator_id, 0));
 
@@ -62,7 +66,11 @@ pub(super) fn plan_try(
                 catch_block,
                 Some(normal_target),
                 visited,
-                active_controls,
+                scope.with_exception_target(
+                    operation
+                        .finally_exception_block()
+                        .or(scope.exception_target),
+                ),
             )?;
 
             Ok(JsCatchPlan::new(parameter.value(), body))
@@ -78,7 +86,7 @@ pub(super) fn plan_try(
                 finally_block,
                 Some(operation.completion_block()),
                 visited,
-                active_controls,
+                scope,
             )
         })
         .transpose()?;

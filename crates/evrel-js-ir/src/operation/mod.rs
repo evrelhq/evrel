@@ -5,6 +5,7 @@ mod binary;
 mod binding;
 mod call;
 mod class;
+mod completion;
 mod constant;
 mod control;
 mod data;
@@ -14,6 +15,7 @@ mod destructure;
 mod effects;
 mod function;
 mod global;
+mod invoke;
 mod jsx;
 mod loops;
 mod memory_effects;
@@ -38,6 +40,7 @@ pub use class::{
     ClassElement, ClassElementKey, ClassField, ClassFieldPlacement, ClassMethod, ClassMethodKind,
     ClassMethodPlacement, ClassStaticBlock, CreateClassOp,
 };
+pub use completion::{CompletionCase, CompletionKind, EnterFinallyOp, ResumeCompletionOp};
 pub use constant::{ConstantOp, ConstantValue, JsString};
 pub use control::{
     BlockTarget, IfOp, JumpOp, OperationSuccessor, RegionYieldOp, ReturnOp, ThrowOp,
@@ -49,6 +52,7 @@ pub use destructure::{BindingWriteMode, DestructureAssignmentOp, DestructureBind
 pub use effects::OperationEffects;
 pub use function::{CreateFunctionOp, LoadArgumentsOp, LoadThisOp};
 pub use global::{LoadGlobalOp, StoreGlobalOp};
+pub use invoke::InvokeOp;
 pub use jsx::{
     JsxAttribute, JsxAttributeName, JsxAttributeValue, JsxChild, JsxElementName, JsxElementOp,
     JsxFragmentOp, JsxMemberBase,

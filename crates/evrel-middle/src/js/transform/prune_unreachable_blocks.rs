@@ -94,7 +94,7 @@ fn retain(block: BlockId, retained: &mut FxHashSet<BlockId>, work: &mut WorkQueu
 mod tests {
     use evrel_js_ir::{
         BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, LoadThisOp, ModuleBuilder,
-        OperationKind, ReturnOp, UnwindTarget,
+        OperationKind, ReturnOp,
     };
 
     use super::prune_unreachable_blocks;
@@ -114,7 +114,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(detached);
@@ -123,7 +122,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
-                UnwindTarget::Propagate,
             );
 
             detached
@@ -155,7 +153,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadThis(LoadThisOp::new()),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
 
@@ -167,7 +164,6 @@ mod tests {
                     completion,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             for block in [then_block, else_block] {
@@ -177,7 +173,6 @@ mod tests {
                     evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [returned],
-                    UnwindTarget::Propagate,
                 );
             }
 
@@ -187,7 +182,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
-                UnwindTarget::Propagate,
             );
 
             completion
@@ -214,7 +208,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]

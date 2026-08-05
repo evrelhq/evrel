@@ -110,7 +110,7 @@ impl<'reserved> JsNameAllocator<'reserved> {
 
 #[cfg(test)]
 mod tests {
-    use evrel_js_ir::{JsModuleIr, LoadGlobalOp, ModuleBuilder, OperationKind, UnwindTarget};
+    use evrel_js_ir::{JsModuleIr, LoadGlobalOp, ModuleBuilder, OperationKind};
 
     use super::{JsNameAllocator, JsReservedNames};
 
@@ -125,7 +125,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("$evrel0")),
                 [],
-                UnwindTarget::Propagate,
             );
 
         let reserved = JsReservedNames::collect(&module);
@@ -145,7 +144,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("$evrel0")),
                 [],
-                UnwindTarget::Propagate,
             );
 
         let reserved = JsReservedNames::collect(&module);

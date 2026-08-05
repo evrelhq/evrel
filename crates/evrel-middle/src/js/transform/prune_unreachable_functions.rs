@@ -30,7 +30,7 @@ pub fn prune_unreachable_functions(module: &mut JsModuleIr) -> usize {
 mod tests {
     use evrel_js_ir::{
         BindingKind, CreateFunctionOp, FunctionKind, FunctionMode, JsModuleIr, ModuleBuilder,
-        OperationKind, UnwindTarget,
+        OperationKind,
     };
 
     use super::prune_unreachable_functions;
@@ -53,7 +53,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(reachable)),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (reachable, unreachable, unreachable_binding)

@@ -21,7 +21,7 @@ pub(crate) use dense::DenseMap;
 pub(crate) use edge::{JsEdgeTransfer, JsMoveSource, build_edge_transfers};
 pub(crate) use function::JsFunctionPlan;
 pub(crate) use local::{JsLocalAllocator, JsLocalId, JsNamePlan};
-pub(crate) use operation::JsOperationPlan;
+pub(crate) use operation::{JsOperationPlan, JsOperationStatementPlan};
 pub(crate) use region::{
     JsExpressionRegionContinuation, JsExpressionRegionPlan, JsExpressionRegionStep,
 };

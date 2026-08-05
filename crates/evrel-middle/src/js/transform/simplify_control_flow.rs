@@ -34,9 +34,7 @@ struct FoldConstantIf {
 
 fn fold_constant_ifs(function: &mut JsFunctionIr) -> usize {
     let rewrites = {
-        let Ok(analysis) = FunctionValueAnalysis::compute(function) else {
-            return 0;
-        };
+        let analysis = FunctionValueAnalysis::compute(function);
 
         function
             .operations()
@@ -72,9 +70,7 @@ enum Rewrite {
 
 fn find_rewrite(function: &JsFunctionIr) -> Option<Rewrite> {
     for (region, _) in function.regions() {
-        let Ok(control_flow) = RegionControlFlowGraph::compute(function, region) else {
-            continue;
-        };
+        let control_flow = RegionControlFlowGraph::compute(function, region);
 
         for &block in control_flow.blocks() {
             if let Some(rewrite) = plan_forwarding_block(function, &control_flow, block) {
@@ -327,7 +323,7 @@ fn block_has_boundary_role(function: &JsFunctionIr, block: BlockId) -> bool {
 mod tests {
     use evrel_js_ir::{
         BlockParameterSource, BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, JumpOp,
-        LoadThisOp, ModuleBuilder, OperationKind, ReturnOp, UnwindTarget,
+        LoadThisOp, ModuleBuilder, OperationKind, ReturnOp,
     };
 
     use super::{fold_constant_ifs, simplify_control_flow};
@@ -344,10 +340,16 @@ mod tests {
                 let then_block = builder.create_block();
                 let else_block = builder.create_block();
                 let completion = builder.create_block();
-                let then_parameter =
-                    builder.append_block_parameter(then_block, BlockParameterSource::Forwarded);
-                let else_parameter =
-                    builder.append_block_parameter(else_block, BlockParameterSource::Forwarded);
+                let then_parameter = builder.append_block_parameter(
+                    then_block,
+                    BlockParameterSource::Forwarded,
+                    evrel_js_ir::ValueType::JsValue,
+                );
+                let else_parameter = builder.append_block_parameter(
+                    else_block,
+                    BlockParameterSource::Forwarded,
+                    evrel_js_ir::ValueType::JsValue,
+                );
                 let condition_value = append_boolean(&mut builder, condition);
                 let then_value = append_number(&mut builder, 1.0);
                 let else_value = append_number(&mut builder, 2.0);
@@ -359,7 +361,6 @@ mod tests {
                         completion,
                     )),
                     [condition_value, then_value, else_value],
-                    UnwindTarget::Propagate,
                 );
 
                 builder.switch_to_block(then_block);
@@ -367,7 +368,6 @@ mod tests {
                     evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [then_parameter],
-                    UnwindTarget::Propagate,
                 );
 
                 builder.switch_to_block(else_block);
@@ -375,7 +375,6 @@ mod tests {
                     evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [else_parameter],
-                    UnwindTarget::Propagate,
                 );
 
                 builder.switch_to_block(completion);
@@ -384,7 +383,6 @@ mod tests {
                     evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Return(ReturnOp::new()),
                     [completion_value],
-                    UnwindTarget::Propagate,
                 );
 
                 (
@@ -428,10 +426,16 @@ mod tests {
             let right = builder.create_block();
             let forwarding = builder.create_block();
             let target = builder.create_block();
-            let forwarding_parameter =
-                builder.append_block_parameter(forwarding, BlockParameterSource::Forwarded);
-            let target_parameter =
-                builder.append_block_parameter(target, BlockParameterSource::Forwarded);
+            let forwarding_parameter = builder.append_block_parameter(
+                forwarding,
+                BlockParameterSource::Forwarded,
+                evrel_js_ir::ValueType::JsValue,
+            );
+            let target_parameter = builder.append_block_parameter(
+                target,
+                BlockParameterSource::Forwarded,
+                evrel_js_ir::ValueType::JsValue,
+            );
 
             let condition = append_unknown_condition(&mut builder);
             builder.terminate(
@@ -442,7 +446,6 @@ mod tests {
                     target,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(left);
@@ -451,7 +454,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                 [left_value],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(right);
@@ -460,7 +462,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                 [right_value],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(forwarding);
@@ -468,7 +469,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 1))),
                 [forwarding_parameter],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(target);
@@ -476,7 +476,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [target_parameter],
-                UnwindTarget::Propagate,
             );
 
             (
@@ -507,6 +506,89 @@ mod tests {
     }
 
     #[test]
+    fn threads_a_forwarding_block_that_discards_its_argument() {
+        let mut module = JsModuleIr::new();
+        let function = module.entry_function();
+
+        let (left, right, forwarding, target, left_argument, right_argument) = {
+            let mut module_builder = ModuleBuilder::new(&mut module);
+            let mut builder = module_builder.function_builder(function);
+            let left = builder.create_block();
+            let right = builder.create_block();
+            let forwarding = builder.create_block();
+            let target = builder.create_block();
+            builder.append_block_parameter(
+                forwarding,
+                BlockParameterSource::Forwarded,
+                evrel_js_ir::ValueType::JsValue,
+            );
+
+            let condition = append_unknown_condition(&mut builder);
+            builder.terminate(
+                evrel_js_ir::LocationId::UNKNOWN,
+                OperationKind::If(IfOp::new(
+                    BlockTarget::new(left, 0),
+                    BlockTarget::new(right, 0),
+                    target,
+                )),
+                [condition],
+            );
+
+            builder.switch_to_block(left);
+            let left_argument = append_number(&mut builder, 1.0);
+            builder.terminate(
+                evrel_js_ir::LocationId::UNKNOWN,
+                OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
+                [left_argument],
+            );
+
+            builder.switch_to_block(right);
+            let right_argument = append_number(&mut builder, 2.0);
+            builder.terminate(
+                evrel_js_ir::LocationId::UNKNOWN,
+                OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
+                [right_argument],
+            );
+
+            builder.switch_to_block(forwarding);
+            builder.terminate(
+                evrel_js_ir::LocationId::UNKNOWN,
+                OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
+                [],
+            );
+
+            builder.switch_to_block(target);
+            let returned = append_number(&mut builder, 3.0);
+            builder.terminate(
+                evrel_js_ir::LocationId::UNKNOWN,
+                OperationKind::Return(ReturnOp::new()),
+                [returned],
+            );
+
+            (
+                left,
+                right,
+                forwarding,
+                target,
+                left_argument,
+                right_argument,
+            )
+        };
+
+        assert_eq!(
+            simplify_control_flow(module.function_mut(function).unwrap()),
+            1
+        );
+
+        let function = module.function(function).unwrap();
+        assert!(function.block(forwarding).is_none());
+        assert_eq!(successor(function, left), (target, Vec::new()));
+        assert_eq!(successor(function, right), (target, Vec::new()));
+        assert!(function.value(left_argument).unwrap().uses().is_empty());
+        assert!(function.value(right_argument).unwrap().uses().is_empty());
+    }
+
+    #[test]
     fn merges_a_linear_block_and_substitutes_its_parameters() {
         let mut module = JsModuleIr::new();
         let function = module.entry_function();
@@ -515,14 +597,17 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function);
             let middle = builder.create_block();
-            let parameter = builder.append_block_parameter(middle, BlockParameterSource::Forwarded);
+            let parameter = builder.append_block_parameter(
+                middle,
+                BlockParameterSource::Forwarded,
+                evrel_js_ir::ValueType::JsValue,
+            );
             let argument = append_number(&mut builder, 42.0);
 
             builder.terminate(
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(middle, 1))),
                 [argument],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(middle);
@@ -530,7 +615,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
-                UnwindTarget::Propagate,
             );
 
             (middle, argument, returned)
@@ -562,8 +646,11 @@ mod tests {
             let right = builder.create_block();
             let forwarding = builder.create_block();
             let target = builder.create_block();
-            let parameter =
-                builder.append_block_parameter(forwarding, BlockParameterSource::Forwarded);
+            let parameter = builder.append_block_parameter(
+                forwarding,
+                BlockParameterSource::Forwarded,
+                evrel_js_ir::ValueType::JsValue,
+            );
 
             let condition = append_unknown_condition(&mut builder);
             builder.terminate(
@@ -574,7 +661,6 @@ mod tests {
                     target,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             for (block, value) in [(left, 1.0), (right, 2.0)] {
@@ -584,7 +670,6 @@ mod tests {
                     evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Jump(JumpOp::new(BlockTarget::new(forwarding, 1))),
                     [value],
-                    UnwindTarget::Propagate,
                 );
             }
 
@@ -593,7 +678,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(target);
@@ -601,7 +685,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [parameter],
-                UnwindTarget::Propagate,
             );
 
             forwarding
@@ -628,7 +711,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(value))),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]
@@ -641,7 +723,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::LoadThis(LoadThisOp::new()),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]
@@ -655,7 +736,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]

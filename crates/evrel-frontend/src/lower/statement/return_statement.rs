@@ -1,6 +1,6 @@
 //! Return statement lowering.
 
-use evrel_js_ir::{ConstantOp, ConstantValue, OperationKind, ReturnOp};
+use evrel_js_ir::{ConstantOp, ConstantValue, OperationKind};
 use oxc_ast::ast::ReturnStatement;
 
 use crate::{
@@ -22,7 +22,7 @@ pub(super) fn lower_return_statement(
         ),
     };
 
-    lowerer.terminate(OperationKind::Return(ReturnOp::new()), [value]);
+    lowerer.terminate_return(value);
 
     Ok(())
 }

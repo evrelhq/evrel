@@ -120,7 +120,6 @@ mod tests {
     use evrel_js_ir::{
         BindingKind, ConstantOp, ConstantValue, InitializeBindingOp, JsModuleIr, LoadGlobalOp,
         LocationId, ModuleBuilder, ModuleExport, ModuleExportName, OperationId, OperationKind,
-        UnwindTarget,
     };
 
     use super::eliminate_dead_bindings;
@@ -173,7 +172,6 @@ mod tests {
                 LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("eval")),
                 [],
-                UnwindTarget::Propagate,
             );
 
         assert_eq!(eliminate_dead_bindings(&mut module), 0);
@@ -198,14 +196,12 @@ mod tests {
             LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
             [],
-            UnwindTarget::Propagate,
         );
         let value_result = builder.operation_results(value)[0];
         let initialization = builder.append_operation(
             LocationId::UNKNOWN,
             OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
             [value_result],
-            UnwindTarget::Propagate,
         );
 
         (binding, value, initialization)

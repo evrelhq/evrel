@@ -17,10 +17,19 @@ use crate::{
 use super::block::lower_block_statement;
 
 #[derive(Clone, Copy)]
-struct CatchTarget {
+struct CatchEntry {
     block: BlockId,
     handler: ExceptionHandlerId,
-    exception: ValueId,
+    exception_parameter: ValueId,
+}
+
+#[derive(Clone, Copy)]
+struct FinallyEntries {
+    body: BlockId,
+    exception: BlockId,
+    exception_handler: ExceptionHandlerId,
+    exception_parameter: ValueId,
+    completion_parameter: ValueId,
 }
 
 /// Lowers a JavaScript `try` statement.
@@ -31,56 +40,81 @@ pub(super) fn lower_try_statement(
     let catch_pattern = lower_catch_pattern(lowerer, statement.handler.as_deref())?;
     let completion_block = lowerer.create_block();
 
-    let finally_block = statement.finalizer.as_ref().map(|_| lowerer.create_block());
-    let finally_handler = finally_block.map(|block| lowerer.create_finally_handler(block));
+    let finally_entries = statement.finalizer.as_ref().map(|_| {
+        let body = lowerer.create_block();
+        let completion_parameter = lowerer.append_completion_block_parameter(body);
+        let exception = lowerer.create_block();
+        let (exception_handler, exception_parameter) = lowerer.create_finally_handler(exception);
 
-    let catch_target = statement
+        FinallyEntries {
+            body,
+            exception,
+            exception_handler,
+            exception_parameter,
+            completion_parameter,
+        }
+    });
+
+    if let Some(finally) = finally_entries {
+        lowerer.push_cleanup(
+            finally.exception_handler,
+            finally.body,
+            finally.completion_parameter,
+        );
+    }
+
+    let catch_entry = statement
         .handler
         .as_ref()
-        .map(|_| create_catch_target(lowerer, finally_handler));
-
-    let protected_handler = catch_target
-        .map(|target| target.handler)
-        .or(finally_handler)
-        .expect("try statement must have catch or finally");
-    let try_block = lowerer.with_unwind_handler(protected_handler, FunctionLowerer::create_block);
+        .map(|_| create_catch_entry(lowerer));
+    let try_block = lowerer.create_block();
 
     lowerer.terminate(
         OperationKind::Try(TryOp::new(
             BlockTarget::new(try_block, 0),
-            catch_target.map(|target| target.block),
-            finally_block,
+            catch_entry.map(|entry| entry.block),
+            finally_entries.map(|entries| entries.body),
+            finally_entries.map(|entries| entries.exception),
             completion_block,
         )),
         [],
     );
 
-    let normal_target = finally_block.unwrap_or(completion_block);
-
-    lowerer.with_unwind_handler(protected_handler, |lowerer| {
+    let lower_try_body = |lowerer: &mut FunctionLowerer<'_, '_, '_>| {
         lowerer.switch_to_block(try_block);
         lower_block_statement(lowerer, &statement.block)?;
-        jump_if_open(lowerer, normal_target);
+        complete_normally(lowerer, finally_entries, completion_block);
 
         Ok::<_, FrontendError>(())
-    })?;
+    };
 
-    if let (Some(clause), Some(target)) = (statement.handler.as_ref(), catch_target) {
-        match finally_handler {
-            Some(handler) => lowerer.with_unwind_handler(handler, |lowerer| {
-                lower_catch_clause(lowerer, clause, target, catch_pattern, normal_target)
-            })?,
-
-            None => {
-                lower_catch_clause(lowerer, clause, target, catch_pattern, normal_target)?;
-            }
-        }
+    match catch_entry {
+        Some(entry) => lowerer.with_catch_handler(entry.handler, lower_try_body)?,
+        None => lower_try_body(lowerer)?,
     }
 
-    if let (Some(finalizer), Some(block)) = (statement.finalizer.as_ref(), finally_block) {
-        lowerer.switch_to_block(block);
-        lower_block_statement(lowerer, finalizer)?;
-        jump_if_open(lowerer, completion_block);
+    if let (Some(clause), Some(entry)) = (statement.handler.as_ref(), catch_entry) {
+        lower_catch_clause(
+            lowerer,
+            clause,
+            entry,
+            catch_pattern,
+            finally_entries,
+            completion_block,
+        )?;
+    }
+
+    if let (Some(finalizer_statement), Some(finally)) =
+        (statement.finalizer.as_ref(), finally_entries)
+    {
+        lowerer.switch_to_block(finally.exception);
+        lowerer.terminate_exception_through_finally(finally.exception_parameter);
+
+        let cleanup = lowerer.pop_cleanup(finally.exception_handler);
+
+        lowerer.switch_to_block(finally.body);
+        lower_block_statement(lowerer, finalizer_statement)?;
+        lowerer.resume_finally(cleanup, completion_block);
     }
 
     lowerer.switch_to_block(completion_block);
@@ -88,24 +122,14 @@ pub(super) fn lower_try_statement(
     Ok(())
 }
 
-fn create_catch_target(
-    lowerer: &mut FunctionLowerer<'_, '_, '_>,
-    finally_handler: Option<ExceptionHandlerId>,
-) -> CatchTarget {
-    match finally_handler {
-        Some(handler) => lowerer.with_unwind_handler(handler, create_catch_target_in_context),
-        None => create_catch_target_in_context(lowerer),
-    }
-}
-
-fn create_catch_target_in_context(lowerer: &mut FunctionLowerer<'_, '_, '_>) -> CatchTarget {
+fn create_catch_entry(lowerer: &mut FunctionLowerer<'_, '_, '_>) -> CatchEntry {
     let block = lowerer.create_block();
-    let (handler, exception) = lowerer.create_catch_handler(block);
+    let (handler, exception_parameter) = lowerer.create_catch_handler(block);
 
-    CatchTarget {
+    CatchEntry {
         block,
         handler,
-        exception,
+        exception_parameter,
     }
 }
 
@@ -125,11 +149,12 @@ fn lower_catch_pattern(
 fn lower_catch_clause(
     lowerer: &mut FunctionLowerer<'_, '_, '_>,
     clause: &CatchClause<'_>,
-    target: CatchTarget,
+    entry: CatchEntry,
     pattern: Option<BindingPattern>,
-    normal_target: BlockId,
+    finally: Option<FinallyEntries>,
+    completion_block: BlockId,
 ) -> Result<(), FrontendError> {
-    lowerer.switch_to_block(target.block);
+    lowerer.switch_to_block(entry.block);
 
     if let Some(pattern) = pattern {
         let operation = match pattern.as_binding() {
@@ -141,20 +166,31 @@ fn lower_catch_clause(
             )),
         };
 
-        lowerer.emit(operation, [target.exception]);
+        lowerer.emit(operation, [entry.exception_parameter]);
     }
 
     lower_block_statement(lowerer, &clause.body)?;
-    jump_if_open(lowerer, normal_target);
+    complete_normally(lowerer, finally, completion_block);
 
     Ok(())
 }
 
-fn jump_if_open(lowerer: &mut FunctionLowerer<'_, '_, '_>, target: BlockId) {
+fn complete_normally(
+    lowerer: &mut FunctionLowerer<'_, '_, '_>,
+    finally: Option<FinallyEntries>,
+    completion_block: BlockId,
+) {
     if !lowerer.current_block_is_terminated() {
-        lowerer.terminate(
-            OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
-            [],
-        );
+        match finally {
+            Some(_) => {
+                lowerer.terminate_normal_through_finally();
+            }
+            None => {
+                lowerer.terminate(
+                    OperationKind::Jump(JumpOp::new(BlockTarget::new(completion_block, 0))),
+                    [],
+                );
+            }
+        }
     }
 }

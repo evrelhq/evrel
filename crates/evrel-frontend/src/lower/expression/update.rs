@@ -23,10 +23,10 @@ pub(super) fn lower_update_expression(
         OxcUpdateOperator::Decrement => UpdateOperator::Decrement,
     };
 
-    let operation = lowerer.emit(OperationKind::Update(UpdateOp::new(operator)), [current]);
+    let results = lowerer.emit(OperationKind::Update(UpdateOp::new(operator)), [current]);
 
     let (old_numeric, new_numeric) = {
-        let [old_numeric, new_numeric] = lowerer.operation_results(operation) else {
+        let [old_numeric, new_numeric] = results.as_slice() else {
             unreachable!("update operations produce exactly two values");
         };
 

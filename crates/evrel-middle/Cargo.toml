@@ -7,3 +7,6 @@ edition = "2024"
 bitflags.workspace = true
 evrel-js-ir = { path = "../evrel-js-ir" }
 rustc-hash.workspace = true
+
+[dev-dependencies]
+evrel-frontend = { path = "../evrel-frontend" }

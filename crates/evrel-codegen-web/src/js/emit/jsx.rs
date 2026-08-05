@@ -399,12 +399,12 @@ fn jsx_container_local<'a>(
     plan: &'a JsFunctionPlan,
     operation_id: OperationId,
 ) -> Result<&'a str, JsCodegenError> {
-    let operation = function
+    function
         .operation(operation_id)
         .ok_or(JsCodegenError::UnknownOperation {
             operation: operation_id,
         })?;
-    let [result] = operation.results() else {
+    let [result] = plan.operation(operation_id).result_destinations() else {
         return Err(JsCodegenError::MalformedOperation {
             operation: operation_id,
         });

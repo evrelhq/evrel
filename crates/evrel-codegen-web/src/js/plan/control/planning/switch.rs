@@ -7,7 +7,7 @@ pub(super) fn plan_switch<'function>(
     terminator_id: OperationId,
     operation: &'function evrel_js_ir::SwitchOp,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<JsSwitchPlan, JsCodegenError> {
     let function = context.function;
 
@@ -55,7 +55,7 @@ pub(super) fn plan_switch<'function>(
             .no_match_target()
             .is_some_and(|target| target.argument_count() != 0);
     let matched_flag = needs_matched_flag.then(|| locals.allocate());
-    let mut nested_controls = active_controls.to_vec();
+    let mut nested_controls = scope.active_controls.to_vec();
 
     nested_controls.push(ActiveControl {
         structure_entry: switch_block,
@@ -94,7 +94,7 @@ pub(super) fn plan_switch<'function>(
                 entry,
                 Some(stop),
                 visited,
-                &nested_controls,
+                scope.with_controls(&nested_controls),
             )?
         };
 

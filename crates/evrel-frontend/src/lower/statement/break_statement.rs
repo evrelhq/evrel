@@ -1,6 +1,5 @@
 //! JavaScript `break` statement lowering.
 
-use evrel_js_ir::{BlockTarget, JumpOp, OperationKind};
 use oxc_ast::ast::BreakStatement;
 
 use crate::{FrontendError, lower::FunctionLowerer};
@@ -15,10 +14,7 @@ pub(super) fn lower_break_statement(
         .break_target(label)
         .expect("Oxc semantic analysis must validate break targets");
 
-    lowerer.terminate(
-        OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
-        [],
-    );
+    lowerer.terminate_break(target);
 
     Ok(())
 }

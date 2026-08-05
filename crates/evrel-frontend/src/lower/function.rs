@@ -1,6 +1,7 @@
 //! Function-level JavaScript lowering state.
 
 mod body;
+mod completion;
 mod control;
 mod definition;
 mod parameter;
@@ -9,7 +10,7 @@ use evrel_js_ir::{
     BindingId, BindingKind, BindingPattern, BlockId, BlockParameterSource, ExceptionHandlerId,
     FunctionBuilder, FunctionId, FunctionKind, FunctionMode, FunctionParameterKind,
     FunctionProperties, LabeledStatementData, LabeledStatementId, LocationId, OperationId,
-    OperationKind, PrivateNameId, RegionId, TemplateSiteId, TextRange, UnwindTarget, ValueId,
+    OperationKind, PrivateNameId, RegionId, TemplateSiteId, TextRange, ValueId,
 };
 use oxc_ast::ast::IdentifierReference;
 use oxc_semantic::{Scoping, SymbolId};
@@ -32,8 +33,7 @@ pub(crate) struct FunctionLowerer<'ir, 'context, 'semantic> {
     builder: FunctionBuilder<'ir>,
     context: &'context mut LoweringContext<'semantic>,
     current_location: LocationId,
-    unwind_target: UnwindTarget,
-    controls: Vec<control::ControlContext>,
+    control_frames: Vec<control::ControlFrame>,
 }
 
 impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
@@ -47,8 +47,7 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
             builder,
             context,
             current_location: location,
-            unwind_target: UnwindTarget::Propagate,
-            controls: Vec::new(),
+            control_frames: Vec::new(),
         }
     }
 
@@ -114,12 +113,8 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
 
         match build(self) {
             Ok(value) => {
-                self.builder.finish_region(
-                    region,
-                    self.current_location,
-                    [value],
-                    self.unwind_target,
-                );
+                self.builder
+                    .finish_region(region, self.current_location, [value]);
                 Ok(region)
             }
             Err(error) => {
@@ -217,29 +212,25 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         entry_block: BlockId,
     ) -> (ExceptionHandlerId, ValueId) {
         self.builder
-            .create_catch_handler(self.unwind_target.handler(), entry_block)
+            .create_catch_handler(self.active_exception_handler(), entry_block)
     }
 
     /// Creates a finally handler nested inside the active unwind handler.
-    pub(crate) fn create_finally_handler(&mut self, entry_block: BlockId) -> ExceptionHandlerId {
-        self.builder
-            .create_finally_handler(self.unwind_target.handler(), entry_block)
-    }
-
-    /// Lowers while routing exceptions to one handler.
-    pub(crate) fn with_unwind_handler<R>(
+    pub(crate) fn create_finally_handler(
         &mut self,
-        handler: ExceptionHandlerId,
-        lower: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        let previous = std::mem::replace(&mut self.unwind_target, UnwindTarget::Handler(handler));
-        let result = lower(self);
+        entry_block: BlockId,
+    ) -> (ExceptionHandlerId, ValueId) {
+        let handler = self
+            .builder
+            .create_finally_handler(self.active_exception_handler(), entry_block);
+        let exception = self.builder.append_block_parameter(
+            entry_block,
+            BlockParameterSource::Exception,
+            evrel_js_ir::ValueType::JsValue,
+        );
 
-        self.unwind_target = previous;
-
-        result
+        (handler, exception)
     }
-
     /// Records source-level labeled-statement structure.
     pub(crate) fn create_labeled_statement(
         &mut self,
@@ -250,14 +241,29 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
 
     /// Appends an SSA parameter forwarded by predecessor operands.
     pub(crate) fn append_forwarded_block_parameter(&mut self, block: BlockId) -> ValueId {
-        self.builder
-            .append_block_parameter(block, BlockParameterSource::Forwarded)
+        self.builder.append_block_parameter(
+            block,
+            BlockParameterSource::Forwarded,
+            evrel_js_ir::ValueType::JsValue,
+        )
     }
 
     /// Appends an SSA parameter created by a predecessor operation.
     pub(crate) fn append_produced_block_parameter(&mut self, block: BlockId) -> ValueId {
-        self.builder
-            .append_block_parameter(block, BlockParameterSource::Produced)
+        self.builder.append_block_parameter(
+            block,
+            BlockParameterSource::Produced,
+            evrel_js_ir::ValueType::JsValue,
+        )
+    }
+
+    /// Appends the compiler-only completion parameter of a finalizer.
+    pub(crate) fn append_completion_block_parameter(&mut self, block: BlockId) -> ValueId {
+        self.builder.append_block_parameter(
+            block,
+            BlockParameterSource::Produced,
+            evrel_js_ir::ValueType::Completion,
+        )
     }
 
     /// Moves subsequent lowering to an existing block.
@@ -291,14 +297,46 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         &mut self,
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
-    ) -> OperationId {
-        self.builder
-            .append_operation(self.current_location, kind, operands, self.unwind_target)
-    }
+    ) -> Vec<ValueId> {
+        let operands = operands.into_iter().collect::<Vec<_>>();
 
-    /// Returns the values produced by an emitted operation.
-    pub(crate) fn operation_results(&self, operation: OperationId) -> &[ValueId] {
-        self.builder.operation_results(operation)
+        let Some(handler) = self.local_exception_entry() else {
+            let operation = self
+                .builder
+                .append_operation(self.current_location, kind, operands);
+
+            return self.builder.operation_results(operation).to_vec();
+        };
+
+        if !self.builder.operation_effects(&kind).may_throw() {
+            let operation = self
+                .builder
+                .append_operation(self.current_location, kind, operands);
+
+            return self.builder.operation_results(operation).to_vec();
+        }
+
+        let normal = self.builder.create_block();
+        let results = (0..kind.result_count())
+            .map(|_| {
+                self.builder.append_block_parameter(
+                    normal,
+                    BlockParameterSource::Produced,
+                    evrel_js_ir::ValueType::JsValue,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        self.builder.invoke(
+            self.current_location,
+            kind,
+            evrel_js_ir::BlockTarget::new(normal, 0),
+            evrel_js_ir::BlockTarget::new(handler, 0),
+            operands,
+        );
+        self.builder.switch_to_block(normal);
+
+        results
     }
 
     /// Emits an operation that must produce exactly one value.
@@ -307,9 +345,9 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
     ) -> ValueId {
-        let operation = self.emit(kind, operands);
+        let results = self.emit(kind, operands);
 
-        let [result] = self.builder.operation_results(operation) else {
+        let [result] = results.as_slice() else {
             panic!("value-producing operation must have exactly one result");
         };
 
@@ -323,7 +361,35 @@ impl<'ir, 'context, 'semantic> FunctionLowerer<'ir, 'context, 'semantic> {
         operands: impl IntoIterator<Item = ValueId>,
     ) -> OperationId {
         self.builder
-            .terminate(self.current_location, kind, operands, self.unwind_target)
+            .terminate(self.current_location, kind, operands)
+    }
+
+    /// Terminates the current block by throwing a JavaScript value.
+    pub(crate) fn terminate_throw(&mut self, value: ValueId) -> OperationId {
+        let Some(handler) = self.local_exception_entry() else {
+            return self.terminate(
+                OperationKind::Throw(evrel_js_ir::ThrowOp::new(None)),
+                [value],
+            );
+        };
+
+        self.builder.terminate(
+            self.current_location,
+            OperationKind::Throw(evrel_js_ir::ThrowOp::new(Some(
+                evrel_js_ir::BlockTarget::new(handler, 0),
+            ))),
+            [value],
+        )
+    }
+
+    fn local_exception_entry(&self) -> Option<BlockId> {
+        let handler = self.active_exception_handler()?;
+        let handler = self
+            .builder
+            .exception_handler(handler)
+            .expect("active exception handler must belong to the function");
+
+        Some(handler.entry_block())
     }
 
     fn location(&mut self, span: Span) -> LocationId {

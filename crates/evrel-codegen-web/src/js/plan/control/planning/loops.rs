@@ -9,10 +9,11 @@ pub(super) fn plan_do_while<'function>(
     operation_block: BlockId,
     loop_operation: &'function DoWhileOp,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<(JsControlStep, BlockId), JsCodegenError> {
     let function_id = context.function_id;
     let function = context.function;
+    let active_exception_target = scope.exception_target;
 
     if entry != loop_operation.body_target().block() {
         return Err(JsCodegenError::UnsupportedControlFlow {
@@ -23,7 +24,7 @@ pub(super) fn plan_do_while<'function>(
 
     let test_block = loop_operation.test_block();
     let exit_block = loop_operation.exit_target().block();
-    let mut nested_controls = active_controls.to_vec();
+    let mut nested_controls = scope.active_controls.to_vec();
 
     nested_controls.push(ActiveControl {
         structure_entry: entry,
@@ -40,7 +41,7 @@ pub(super) fn plan_do_while<'function>(
         entry,
         Some(test_block),
         visited,
-        &nested_controls,
+        scope.with_controls(&nested_controls),
     )?;
 
     let operation_block_data =
@@ -50,11 +51,11 @@ pub(super) fn plan_do_while<'function>(
                 block: operation_block,
             })?;
 
-    if operation_block_data
-        .parameters()
-        .iter()
-        .any(|parameter| parameter.source() != BlockParameterSource::Forwarded)
-    {
+    if !value_flow_parameters_are_supported(
+        function,
+        operation_block,
+        operation_block_data.parameters(),
+    ) {
         return Err(JsCodegenError::UnsupportedControlFlow {
             function: function_id,
             reason: concat!(file!(), ":", line!()),
@@ -102,13 +103,16 @@ pub(super) fn plan_do_while<'function>(
         });
     }
 
-    let (test_flow, mut test_blocks, test_edges) =
-        plan_value_flow(function, test_block, operation_block).ok_or(
-            JsCodegenError::UnsupportedControlFlow {
-                function: function_id,
-                reason: concat!(file!(), ":", line!()),
-            },
-        )?;
+    let (test_flow, mut test_blocks, test_edges) = plan_value_flow(
+        function,
+        test_block,
+        operation_block,
+        active_exception_target,
+    )
+    .ok_or(JsCodegenError::UnsupportedControlFlow {
+        function: function_id,
+        reason: concat!(file!(), ":", line!()),
+    })?;
     if !test_blocks.contains(&operation_block) {
         test_blocks.push(operation_block);
     }
@@ -146,7 +150,7 @@ pub(super) fn plan_while<'function>(
     operation_block: BlockId,
     loop_operation: &'function WhileOp,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<(JsControlStep, BlockId), JsCodegenError> {
     let function_id = context.function_id;
     let function = context.function;
@@ -166,7 +170,7 @@ pub(super) fn plan_while<'function>(
             operation_block,
             loop_operation,
             visited,
-            active_controls,
+            scope,
         );
     }
 
@@ -226,7 +230,7 @@ pub(super) fn plan_while<'function>(
     }
 
     let exit = loop_operation.exit_target().block();
-    let mut nested_controls = active_controls.to_vec();
+    let mut nested_controls = scope.active_controls.to_vec();
 
     nested_controls.push(ActiveControl {
         structure_entry: entry,
@@ -243,7 +247,7 @@ pub(super) fn plan_while<'function>(
         loop_operation.body_target().block(),
         Some(entry),
         visited,
-        &nested_controls,
+        scope.with_controls(&nested_controls),
     )?;
 
     Ok((
@@ -266,7 +270,7 @@ pub(super) fn plan_while_flow<'function>(
     operation_block: BlockId,
     loop_operation: &'function WhileOp,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<(JsControlStep, BlockId), JsCodegenError> {
     let function_id = context.function_id;
     let function = context.function;
@@ -316,12 +320,13 @@ pub(super) fn plan_while_flow<'function>(
         });
     }
 
-    let (test_flow, mut blocks, edges) = plan_value_flow(function, entry, operation_block).ok_or(
-        JsCodegenError::UnsupportedControlFlow {
-            function: function_id,
-            reason: concat!(file!(), ":", line!()),
-        },
-    )?;
+    let (test_flow, mut blocks, edges) =
+        plan_value_flow(function, entry, operation_block, scope.exception_target).ok_or(
+            JsCodegenError::UnsupportedControlFlow {
+                function: function_id,
+                reason: concat!(file!(), ":", line!()),
+            },
+        )?;
     if !blocks.contains(&operation_block) {
         blocks.push(operation_block);
     }
@@ -334,7 +339,7 @@ pub(super) fn plan_while_flow<'function>(
         }
     }
     let exit = loop_operation.exit_target().block();
-    let mut nested_controls = active_controls.to_vec();
+    let mut nested_controls = scope.active_controls.to_vec();
     nested_controls.push(ActiveControl {
         structure_entry: entry,
         produced_block: None,
@@ -349,7 +354,7 @@ pub(super) fn plan_while_flow<'function>(
         loop_operation.body_target().block(),
         Some(entry),
         visited,
-        &nested_controls,
+        scope.with_controls(&nested_controls),
     )?;
 
     Ok((
@@ -378,10 +383,11 @@ pub(super) fn plan_for<'function>(
     operation_block: BlockId,
     loop_operation: &'function ForOp,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<(JsControlStep, BlockId), JsCodegenError> {
     let function_id = context.function_id;
     let function = context.function;
+    let active_exception_target = scope.exception_target;
 
     if entry != loop_operation.initializer_block() {
         return Err(JsCodegenError::UnsupportedControlFlow {
@@ -394,7 +400,7 @@ pub(super) fn plan_for<'function>(
     let body_block = loop_operation.body_block();
     let update_block = loop_operation.update_block();
     let exit_block = loop_operation.exit_block();
-    let mut initializer_controls = active_controls.to_vec();
+    let mut initializer_controls = scope.active_controls.to_vec();
     initializer_controls.push(ActiveControl {
         structure_entry: entry,
         produced_block: None,
@@ -409,14 +415,15 @@ pub(super) fn plan_for<'function>(
         entry,
         Some(operation_block),
         visited,
-        &initializer_controls,
+        scope.with_controls(&initializer_controls),
     )?;
     let initializer_has_control = initializer
         .steps()
         .iter()
-        .any(|step| !matches!(step, JsControlStep::Block(_) | JsControlStep::Edge(_)));
-    let initializer_is_prelude =
-        initializer_has_control && !sequence_contains_binding_declaration(function, &initializer);
+        .any(|step| !matches!(step, JsControlStep::Operations(_) | JsControlStep::Edge(_)));
+    let initializer_is_prelude = sequence_contains_var_destructure_binding(function, &initializer)
+        || (initializer_has_control
+            && !sequence_contains_binding_declaration(function, &initializer));
 
     if !visited.insert(operation_block) {
         return Err(JsCodegenError::UnsupportedControlFlow {
@@ -458,7 +465,7 @@ pub(super) fn plan_for<'function>(
         });
     }
 
-    let mut nested_controls = active_controls.to_vec();
+    let mut nested_controls = scope.active_controls.to_vec();
     nested_controls.push(ActiveControl {
         structure_entry: entry,
         produced_block: None,
@@ -474,7 +481,7 @@ pub(super) fn plan_for<'function>(
         body_block,
         Some(update_block),
         visited,
-        &nested_controls,
+        scope.with_controls(&nested_controls),
     )?;
     let update = plan_sequence(
         context,
@@ -482,7 +489,7 @@ pub(super) fn plan_for<'function>(
         update_block,
         Some(operation_block),
         visited,
-        &nested_controls,
+        scope.with_controls(&nested_controls),
     )?;
     if !visited.insert(test_block) {
         return Err(JsCodegenError::UnsupportedControlFlow {
@@ -555,9 +562,13 @@ pub(super) fn plan_for<'function>(
             }
         }
         _ => {
-            let Some((flow, flow_blocks)) =
-                recognize_for_test_flow(function, test_block, body_block, exit_block)
-            else {
+            let Some((flow, flow_blocks)) = recognize_for_test_flow(
+                function,
+                test_block,
+                body_block,
+                exit_block,
+                active_exception_target,
+            ) else {
                 return Err(JsCodegenError::UnsupportedControlFlow {
                     function: function_id,
                     reason: concat!(file!(), ":", line!()),

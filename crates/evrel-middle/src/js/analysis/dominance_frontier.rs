@@ -115,7 +115,7 @@ impl RegionDominanceFrontier {
 mod tests {
     use evrel_js_ir::{
         BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, JumpOp, ModuleBuilder,
-        OperationKind, UnwindTarget,
+        OperationKind,
     };
 
     use super::RegionDominanceFrontier;
@@ -138,7 +138,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
@@ -149,7 +148,6 @@ mod tests {
                     join,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(left);
@@ -157,7 +155,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(right);
@@ -165,14 +162,13 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(join, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (entry, left, right, join)
         };
 
         let function = module.function(function_id).unwrap();
-        let graph = RegionControlFlowGraph::compute(function, function.body_region()).unwrap();
+        let graph = RegionControlFlowGraph::compute(function, function.body_region());
         let dominance = RegionDominatorTree::compute(&graph);
         let frontier = RegionDominanceFrontier::compute(&graph, &dominance);
 
@@ -198,7 +194,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(header);
@@ -206,7 +201,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
@@ -217,7 +211,6 @@ mod tests {
                     exit,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(body);
@@ -225,14 +218,13 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (header, body, exit)
         };
 
         let function = module.function(function_id).unwrap();
-        let graph = RegionControlFlowGraph::compute(function, function.body_region()).unwrap();
+        let graph = RegionControlFlowGraph::compute(function, function.body_region());
         let dominance = RegionDominatorTree::compute(&graph);
         let frontier = RegionDominanceFrontier::compute(&graph, &dominance);
 
@@ -260,7 +252,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
@@ -271,7 +262,6 @@ mod tests {
                     second_join,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(first_split);
@@ -279,7 +269,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
             builder.terminate(
@@ -290,7 +279,6 @@ mod tests {
                     first_join,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             for block in [left, right] {
@@ -299,7 +287,6 @@ mod tests {
                     evrel_js_ir::LocationId::UNKNOWN,
                     OperationKind::Jump(JumpOp::new(BlockTarget::new(first_join, 0))),
                     [],
-                    UnwindTarget::Propagate,
                 );
             }
 
@@ -308,7 +295,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(second_join, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(bypass);
@@ -316,14 +302,13 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(second_join, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (left, right, first_join, second_join)
         };
 
         let function = module.function(function_id).unwrap();
-        let graph = RegionControlFlowGraph::compute(function, function.body_region()).unwrap();
+        let graph = RegionControlFlowGraph::compute(function, function.body_region());
         let dominance = RegionDominatorTree::compute(&graph);
         let frontier = RegionDominanceFrontier::compute(&graph, &dominance);
 

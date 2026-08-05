@@ -3,7 +3,7 @@
 use evrel_js_ir::{BlockId, BlockParameterSource, JsFunctionIr, OperationId, RegionId, ValueId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::js::analysis::{RegionControlFlowError, RegionControlFlowGraph};
+use crate::js::analysis::RegionControlFlowGraph;
 use crate::js::work_queue::WorkQueue;
 
 use super::abstract_value::BOTTOM;
@@ -19,11 +19,8 @@ pub(super) struct SparseValueAnalysis {
 }
 
 impl SparseValueAnalysis {
-    pub(super) fn compute(
-        function: &JsFunctionIr,
-        inputs: &FunctionValueInputs,
-    ) -> Result<Self, RegionControlFlowError> {
-        Ok(SparseValueSolver::new(function, inputs)?.solve())
+    pub(super) fn compute(function: &JsFunctionIr, inputs: &FunctionValueInputs) -> Self {
+        SparseValueSolver::new(function, inputs).solve()
     }
 
     pub(super) fn value(&self, value: ValueId) -> &AbstractValue {
@@ -60,18 +57,13 @@ struct SparseValueSolver<'ir, 'inputs> {
 }
 
 impl<'ir, 'inputs> SparseValueSolver<'ir, 'inputs> {
-    fn new(
-        function: &'ir JsFunctionIr,
-        inputs: &'inputs FunctionValueInputs,
-    ) -> Result<Self, RegionControlFlowError> {
+    fn new(function: &'ir JsFunctionIr, inputs: &'inputs FunctionValueInputs) -> Self {
         let control_flow = function
             .regions()
-            .map(|(region, _)| {
-                RegionControlFlowGraph::compute(function, region).map(|graph| (region, graph))
-            })
-            .collect::<Result<FxHashMap<_, _>, _>>()?;
+            .map(|(region, _)| (region, RegionControlFlowGraph::compute(function, region)))
+            .collect::<FxHashMap<_, _>>();
 
-        Ok(Self {
+        Self {
             function,
             inputs,
             control_flow,
@@ -82,7 +74,7 @@ impl<'ir, 'inputs> SparseValueSolver<'ir, 'inputs> {
             scanning_block: None,
             block_work: WorkQueue::new(),
             operation_work: WorkQueue::new(),
-        })
+        }
     }
 
     fn solve(mut self) -> SparseValueAnalysis {
@@ -343,7 +335,9 @@ impl<'ir, 'inputs> SparseValueSolver<'ir, 'inputs> {
 
             for (parameter_index, parameter) in parameters.iter().enumerate() {
                 let incoming = match parameter.source() {
-                    BlockParameterSource::Produced if parameter_index < produced_count => {
+                    BlockParameterSource::Produced | BlockParameterSource::Exception
+                        if parameter_index < produced_count =>
+                    {
                         AbstractValue::unknown()
                     }
 
@@ -351,9 +345,8 @@ impl<'ir, 'inputs> SparseValueSolver<'ir, 'inputs> {
                         .value(forwarded[parameter_index - produced_count])
                         .clone(),
 
-                    // Exceptional transfer is not represented by an ordinary
-                    // regional edge. Produced and forwarded mismatches indicate
-                    // malformed IR, but conservatively remain unknown here.
+                    // Source and position mismatches indicate malformed IR, but
+                    // conservatively remain unknown here.
                     BlockParameterSource::Exception
                     | BlockParameterSource::Produced
                     | BlockParameterSource::Forwarded => AbstractValue::unknown(),

@@ -2,17 +2,32 @@
 
 use crate::{BlockId, OperationId};
 
+/// The semantic type of an SSA value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ValueType {
+    /// An ordinary ECMAScript language value.
+    JsValue,
+
+    /// A compiler-only ECMAScript completion record.
+    ///
+    /// Completion values may flow through cleanup blocks but must never be
+    /// consumed by ordinary JavaScript operations.
+    Completion,
+}
+
 /// Metadata stored for an IR value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValueData {
     definition: ValueDefinition,
+    ty: ValueType,
     uses: Vec<ValueUse>,
 }
 
 impl ValueData {
-    pub(crate) fn new(definition: ValueDefinition) -> Self {
+    pub(crate) fn new(definition: ValueDefinition, ty: ValueType) -> Self {
         Self {
             definition,
+            ty,
             uses: Vec::new(),
         }
     }
@@ -20,6 +35,11 @@ impl ValueData {
     /// Returns where the value is defined.
     pub fn definition(&self) -> &ValueDefinition {
         &self.definition
+    }
+
+    /// Returns the semantic type of this value.
+    pub const fn ty(&self) -> ValueType {
+        self.ty
     }
 
     /// Returns every operand slot that reads the value.
@@ -115,23 +135,40 @@ impl ValueUse {
 
 #[cfg(test)]
 mod tests {
-    use crate::OperationId;
+    use crate::{BlockId, OperationId};
 
-    use super::{ValueData, ValueDefinition, ValueUse};
+    use super::{ValueData, ValueDefinition, ValueType, ValueUse};
 
     #[test]
     fn tracks_distinct_operand_uses() {
         let definer = OperationId::from_index(0);
         let user = OperationId::from_index(1);
 
-        let mut value = ValueData::new(ValueDefinition::OperationResult {
-            operation: definer,
-            result_index: 0,
-        });
+        let mut value = ValueData::new(
+            ValueDefinition::OperationResult {
+                operation: definer,
+                result_index: 0,
+            },
+            ValueType::JsValue,
+        );
 
         value.add_use(ValueUse::new(user, 0));
         value.add_use(ValueUse::new(user, 1));
 
+        assert_eq!(value.ty(), ValueType::JsValue);
         assert_eq!(value.uses().len(), 2);
+    }
+
+    #[test]
+    fn records_completion_values_as_compiler_only() {
+        let value = ValueData::new(
+            ValueDefinition::BlockParameter {
+                block: BlockId::from_index(0),
+                parameter_index: 0,
+            },
+            ValueType::Completion,
+        );
+
+        assert_eq!(value.ty(), ValueType::Completion);
     }
 }

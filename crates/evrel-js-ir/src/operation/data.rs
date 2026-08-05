@@ -1,19 +1,20 @@
 //! Common operation representation.
 
 use crate::{
-    BindingId, BlockId, FunctionId, LocationId, OperationSuccessor, RegionId, UnwindTarget, ValueId,
+    BindingId, BlockId, BlockParameterSource, FunctionId, LocationId, OperationSuccessor, RegionId,
+    ValueId, ValueType,
 };
 
 use super::{
     ArrayLiteralElement, ArrayLiteralOp, AwaitOp, BinaryOp, CallOp, ConstantOp, ConstantValue,
     ConstructOp, CreateClassOp, CreateFunctionOp, DebuggerOp, DeleteOp, DestructureAssignmentOp,
-    DestructureBindingOp, DoWhileOp, DynamicImportOp, ForInOp, ForOfOp, ForOp, HasPrivateNameOp,
-    IfOp, InitializeBindingOp, IsNullishOp, JsxElementOp, JsxFragmentOp, JumpOp, LoadArgumentsOp,
-    LoadBindingOp, LoadGlobalOp, LoadPropertyOp, LoadSuperPropertyOp, LoadThisOp, LoopOperation,
-    MemoryEffects, MetaPropertyOp, ObjectLiteralOp, OperationEffects, RegExpLiteralOp,
-    RegionYieldOp, ReturnOp, StoreBindingOp, StoreGlobalOp, StorePropertyOp, StoreSuperPropertyOp,
-    SuperCallOp, SwitchOp, TaggedTemplateOp, TemplateLiteralOp, ThrowOp, TryOp, TypeofOp,
-    TypeofTarget, UnaryOp, UpdateOp, WhileOp, YieldOp,
+    DestructureBindingOp, DoWhileOp, DynamicImportOp, EnterFinallyOp, ForInOp, ForOfOp, ForOp,
+    HasPrivateNameOp, IfOp, InitializeBindingOp, InvokeOp, IsNullishOp, JsxElementOp,
+    JsxFragmentOp, JumpOp, LoadArgumentsOp, LoadBindingOp, LoadGlobalOp, LoadPropertyOp,
+    LoadSuperPropertyOp, LoadThisOp, LoopOperation, MemoryEffects, MetaPropertyOp, ObjectLiteralOp,
+    OperationEffects, RegExpLiteralOp, RegionYieldOp, ResumeCompletionOp, ReturnOp, StoreBindingOp,
+    StoreGlobalOp, StorePropertyOp, StoreSuperPropertyOp, SuperCallOp, SwitchOp, TaggedTemplateOp,
+    TemplateLiteralOp, ThrowOp, TryOp, TypeofOp, TypeofTarget, UnaryOp, UpdateOp, WhileOp, YieldOp,
 };
 
 /// Data stored for an executable IR instruction.
@@ -21,7 +22,6 @@ use super::{
 pub struct OperationData {
     block: BlockId,
     location: LocationId,
-    unwind_target: UnwindTarget,
     kind: OperationKind,
     operands: Vec<ValueId>,
     results: Vec<ValueId>,
@@ -31,14 +31,12 @@ impl OperationData {
     pub(crate) fn new(
         block: BlockId,
         location: LocationId,
-        unwind_target: UnwindTarget,
         kind: OperationKind,
         operands: Vec<ValueId>,
     ) -> Self {
         Self {
             block,
             location,
-            unwind_target,
             kind,
             operands,
             results: Vec::new(),
@@ -59,15 +57,6 @@ impl OperationData {
         self.block = block;
     }
 
-    /// Returns where exceptions raised by this operation leave normal control flow.
-    ///
-    /// This records the operation's unwind context even when the current operation
-    /// kind cannot throw intrinsically. Propagation is an explicit function exit,
-    /// not an unknown or synthetic catch.
-    pub const fn unwind_target(&self) -> UnwindTarget {
-        self.unwind_target
-    }
-
     /// Returns the operation-specific behavior.
     pub const fn kind(&self) -> &OperationKind {
         &self.kind
@@ -76,6 +65,17 @@ impl OperationData {
     /// Returns the values consumed by this operation.
     pub fn operands(&self) -> &[ValueId] {
         &self.operands
+    }
+
+    /// Returns operands consumed by the operation itself, excluding values
+    /// forwarded through explicit invoke successors.
+    pub fn operation_operands(&self) -> &[ValueId] {
+        let operand_count = match &self.kind {
+            OperationKind::Invoke(operation) => operation.operation().operand_count(),
+            kind => kind.operand_count(),
+        };
+
+        &self.operands[..operand_count]
     }
 
     /// Returns the values produced by this operation.
@@ -188,10 +188,10 @@ impl OperationData {
             successor.argument_operand_range(),
             arguments.iter().copied(),
         );
-        *self.kind.successor_target_mut(successor_index) =
+        *self.successor_target_mut(successor_index) =
             super::BlockTarget::new(target, arguments.len());
 
-        debug_assert_eq!(self.operands.len(), self.kind.operand_count());
+        debug_assert_eq!(self.operands.len(), self.expected_operand_count());
     }
 
     pub(crate) fn append_successor_argument(
@@ -209,11 +209,9 @@ impl OperationData {
 
         self.operands.insert(operand_index, argument);
 
-        self.kind
-            .successor_target_mut(successor_index)
-            .append_argument();
+        self.successor_target_mut(successor_index).append_argument();
 
-        debug_assert_eq!(self.operands.len(), self.kind.operand_count(),);
+        debug_assert_eq!(self.operands.len(), self.expected_operand_count());
 
         operand_index
     }
@@ -237,13 +235,23 @@ impl OperationData {
         let operand_index = successor.argument_operand_range().start + argument_index;
         let argument = self.operands.remove(operand_index);
 
-        self.kind
-            .successor_target_mut(successor_index)
-            .remove_argument();
+        self.successor_target_mut(successor_index).remove_argument();
 
-        debug_assert_eq!(self.operands.len(), self.kind.operand_count());
+        debug_assert_eq!(self.operands.len(), self.expected_operand_count());
 
         (operand_index, argument)
+    }
+
+    pub(crate) fn produced_argument_source(&self, successor_index: usize) -> BlockParameterSource {
+        self.kind.produced_argument_source(successor_index)
+    }
+
+    fn successor_target_mut(&mut self, successor_index: usize) -> &mut super::BlockTarget {
+        self.kind.successor_target_mut(successor_index)
+    }
+
+    fn expected_operand_count(&self) -> usize {
+        self.kind.operand_count()
     }
 }
 
@@ -288,6 +296,7 @@ pub enum OperationKind {
     Call(CallOp),
     SuperCall(SuperCallOp),
     Construct(ConstructOp),
+    Invoke(Box<InvokeOp>),
     Jump(JumpOp),
     If(IfOp),
     Try(TryOp),
@@ -297,6 +306,8 @@ pub enum OperationKind {
     ForIn(ForInOp),
     ForOf(ForOfOp),
     Switch(SwitchOp),
+    EnterFinally(EnterFinallyOp),
+    ResumeCompletion(ResumeCompletionOp),
     RegionYield(RegionYieldOp),
     Return(ReturnOp),
     Throw(ThrowOp),
@@ -309,6 +320,8 @@ impl OperationKind {
     /// [`FunctionIr::operation_memory_effects`](crate::FunctionIr::operation_memory_effects).
     pub fn intrinsic_memory_effects(&self) -> MemoryEffects {
         match self {
+            Self::Invoke(operation) => operation.operation().intrinsic_memory_effects(),
+
             Self::Constant(_)
             | Self::RegExpLiteral(_)
             | Self::CreateFunction(_)
@@ -320,6 +333,8 @@ impl OperationKind {
             | Self::While(_)
             | Self::DoWhile(_)
             | Self::For(_)
+            | Self::EnterFinally(_)
+            | Self::ResumeCompletion(_)
             | Self::RegionYield(_)
             | Self::Return(_)
             | Self::Throw(_) => MemoryEffects::NONE,
@@ -407,6 +422,8 @@ impl OperationKind {
     /// [`FunctionIr::operation_effects`](crate::FunctionIr::operation_effects).
     pub fn intrinsic_effects(&self) -> OperationEffects {
         match self {
+            Self::Invoke(operation) => operation.operation().intrinsic_effects(),
+
             Self::Constant(_)
             | Self::RegExpLiteral(_)
             | Self::CreateFunction(_)
@@ -417,6 +434,8 @@ impl OperationKind {
             | Self::If(_)
             | Self::While(_)
             | Self::DoWhile(_)
+            | Self::EnterFinally(_)
+            | Self::ResumeCompletion(_)
             | Self::RegionYield(_)
             | Self::Return(_) => OperationEffects::NONE,
 
@@ -503,6 +522,7 @@ impl OperationKind {
             Self::Call(operation) => operation.operand_count(),
             Self::SuperCall(operation) => operation.operand_count(),
             Self::Construct(operation) => operation.operand_count(),
+            Self::Invoke(operation) => operation.operand_count(),
             Self::Jump(operation) => operation.operand_count(),
             Self::If(operation) => operation.operand_count(),
             Self::Try(operation) => operation.operand_count(),
@@ -512,13 +532,16 @@ impl OperationKind {
             Self::ForIn(operation) => operation.operand_count(),
             Self::ForOf(operation) => operation.operand_count(),
             Self::Switch(operation) => operation.operand_count(),
+            Self::EnterFinally(operation) => operation.operand_count(),
+            Self::ResumeCompletion(operation) => operation.operand_count(),
             Self::RegionYield(operation) => operation.operand_count(),
             Self::Return(operation) => operation.operand_count(),
             Self::Throw(operation) => operation.operand_count(),
         }
     }
 
-    pub(crate) const fn result_count(&self) -> usize {
+    /// Returns the number of SSA values produced when the operation succeeds.
+    pub fn result_count(&self) -> usize {
         match self {
             Self::Constant(operation) => operation.result_count(),
             Self::RegExpLiteral(operation) => operation.result_count(),
@@ -558,6 +581,7 @@ impl OperationKind {
             Self::Call(operation) => operation.result_count(),
             Self::SuperCall(operation) => operation.result_count(),
             Self::Construct(operation) => operation.result_count(),
+            Self::Invoke(_) => 0,
             Self::Jump(operation) => operation.result_count(),
             Self::If(operation) => operation.result_count(),
             Self::Try(operation) => operation.result_count(),
@@ -567,6 +591,8 @@ impl OperationKind {
             Self::ForIn(operation) => operation.result_count(),
             Self::ForOf(operation) => operation.result_count(),
             Self::Switch(operation) => operation.result_count(),
+            Self::EnterFinally(operation) => operation.result_count(),
+            Self::ResumeCompletion(operation) => operation.result_count(),
             Self::RegionYield(operation) => operation.result_count(),
             Self::Return(operation) => operation.result_count(),
             Self::Throw(operation) => operation.result_count(),
@@ -576,6 +602,7 @@ impl OperationKind {
     /// Visits every binding referenced by this operation.
     pub fn visit_referenced_bindings(&self, mut visit: impl FnMut(BindingId)) {
         match self {
+            Self::Invoke(operation) => operation.operation().visit_referenced_bindings(visit),
             Self::CreateClass(operation) => {
                 if let Some(binding) = operation.self_binding() {
                     visit(binding);
@@ -612,6 +639,7 @@ impl OperationKind {
     /// Visits every unresolved global identifier referenced by this operation.
     pub fn visit_referenced_global_names(&self, mut visit: impl FnMut(&str)) {
         match self {
+            Self::Invoke(operation) => operation.operation().visit_referenced_global_names(visit),
             Self::LoadGlobal(operation) => visit(operation.name()),
             Self::StoreGlobal(operation) => visit(operation.name()),
             Self::Typeof(operation) => {
@@ -626,6 +654,7 @@ impl OperationKind {
     /// Returns inline regions owned by this operation in semantic order.
     pub fn regions(&self) -> Vec<RegionId> {
         match self {
+            Self::Invoke(operation) => operation.operation().regions(),
             Self::ArrayLiteral(operation) => operation.regions(),
             Self::ObjectLiteral(operation) => operation.regions(),
             Self::JsxElement(operation) => operation.regions(),
@@ -646,6 +675,7 @@ impl OperationKind {
     /// Visits every statically referenced module-owned function body.
     pub fn visit_referenced_functions(&self, mut visit: impl FnMut(FunctionId)) {
         match self {
+            Self::Invoke(operation) => operation.operation().visit_referenced_functions(visit),
             Self::CreateFunction(operation) => visit(operation.function()),
             Self::ObjectLiteral(operation) => {
                 for function in operation.referenced_functions() {
@@ -664,7 +694,8 @@ impl OperationKind {
     pub(crate) const fn is_terminator(&self) -> bool {
         matches!(
             self,
-            Self::Jump(_)
+            Self::Invoke(_)
+                | Self::Jump(_)
                 | Self::If(_)
                 | Self::Try(_)
                 | Self::While(_)
@@ -673,6 +704,8 @@ impl OperationKind {
                 | Self::ForIn(_)
                 | Self::ForOf(_)
                 | Self::Switch(_)
+                | Self::EnterFinally(_)
+                | Self::ResumeCompletion(_)
                 | Self::RegionYield(_)
                 | Self::Return(_)
                 | Self::Throw(_)
@@ -682,6 +715,8 @@ impl OperationKind {
     /// Returns executable CFG successors in semantic order.
     pub fn successors(&self) -> Vec<OperationSuccessor> {
         match self {
+            Self::Invoke(operation) => operation.successors().into(),
+
             Self::Jump(operation) => {
                 vec![OperationSuccessor::new(operation.target(), 0)]
             }
@@ -712,7 +747,53 @@ impl OperationKind {
 
             Self::Switch(operation) => operation.successors(),
 
+            Self::EnterFinally(operation) => operation.successors(),
+
+            Self::ResumeCompletion(operation) => operation.successors(),
+
+            Self::Throw(operation) => operation.successors(),
+
             _ => Vec::new(),
+        }
+    }
+
+    /// Returns the source of block arguments produced by one successor.
+    pub(crate) const fn produced_argument_source(
+        &self,
+        successor_index: usize,
+    ) -> BlockParameterSource {
+        match self {
+            Self::Invoke(operation) => operation.produced_argument_source(successor_index),
+            Self::Throw(_) if successor_index == 0 => BlockParameterSource::Exception,
+            _ => BlockParameterSource::Produced,
+        }
+    }
+
+    /// Returns the semantic type of one block argument produced by a successor.
+    pub(crate) fn produced_argument_type(
+        &self,
+        successor_index: usize,
+        produced_index: usize,
+    ) -> Option<ValueType> {
+        match self {
+            Self::Invoke(operation) => {
+                operation.produced_argument_type(successor_index, produced_index)
+            }
+            Self::EnterFinally(_) if successor_index == 0 && produced_index == 0 => {
+                Some(ValueType::Completion)
+            }
+            Self::ResumeCompletion(operation) => operation
+                .cases()
+                .get(successor_index)
+                .filter(|case| produced_index < case.kind().payload_count())
+                .map(|_| ValueType::JsValue),
+            Self::Throw(_) if successor_index == 0 && produced_index == 0 => {
+                Some(ValueType::JsValue)
+            }
+            Self::ForIn(_) | Self::ForOf(_) if successor_index == 0 && produced_index == 0 => {
+                Some(ValueType::JsValue)
+            }
+            _ => None,
         }
     }
 
@@ -721,6 +802,8 @@ impl OperationKind {
         successor_index: usize,
     ) -> &mut super::BlockTarget {
         match self {
+            Self::Invoke(operation) => operation.target_mut(successor_index),
+
             Self::Jump(operation) => match successor_index {
                 0 => &mut operation.target,
                 _ => panic!("jump has no successor {successor_index}"),
@@ -762,6 +845,25 @@ impl OperationKind {
                 panic!("switch has no successor {successor_index}");
             }
 
+            Self::EnterFinally(operation) => match successor_index {
+                0 => &mut operation.target,
+                _ => panic!("enter_finally has no successor {successor_index}"),
+            },
+
+            Self::ResumeCompletion(operation) => operation
+                .cases
+                .get_mut(successor_index)
+                .map(|case| &mut case.target)
+                .unwrap_or_else(|| panic!("resume_completion has no successor {successor_index}")),
+
+            Self::Throw(operation) => match successor_index {
+                0 => operation
+                    .exception_target
+                    .as_mut()
+                    .expect("propagating throw has no successor"),
+                _ => panic!("throw has no successor {successor_index}"),
+            },
+
             _ => panic!("operation kind has no successor {successor_index}",),
         }
     }
@@ -769,6 +871,7 @@ impl OperationKind {
     /// Returns structurally referenced non-successor blocks.
     pub fn structural_blocks(&self) -> Vec<BlockId> {
         match self {
+            Self::Invoke(operation) => operation.operation().structural_blocks(),
             Self::If(operation) => vec![operation.completion_block()],
             Self::Try(operation) => operation.structural_blocks(),
             Self::While(operation) => operation.structural_blocks(),
@@ -782,5 +885,16 @@ impl OperationKind {
     /// Returns whether operand zero selects between two truthiness successors.
     pub const fn is_conditional_branch(&self) -> bool {
         matches!(self, Self::If(_) | Self::While(_) | Self::DoWhile(_))
+    }
+
+    pub(crate) const fn fixed_operand_type(&self, operand_index: usize) -> Option<ValueType> {
+        match self {
+            Self::Invoke(operation) => operation.operation().fixed_operand_type(operand_index),
+            Self::EnterFinally(operation) if operand_index < operation.kind().payload_count() => {
+                Some(ValueType::JsValue)
+            }
+            Self::ResumeCompletion(_) if operand_index == 0 => Some(ValueType::Completion),
+            _ => None,
+        }
     }
 }

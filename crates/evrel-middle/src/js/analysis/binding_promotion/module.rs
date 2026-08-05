@@ -170,7 +170,7 @@ mod tests {
     use evrel_js_ir::{
         BindingId, BindingKind, ConstantOp, ConstantValue, FunctionId, FunctionKind, FunctionMode,
         InitializeBindingOp, JsModuleIr, LoadBindingOp, LoadGlobalOp, ModuleBuilder, ModuleExport,
-        ModuleExportName, OperationKind, TextRange, UnwindTarget,
+        ModuleExportName, OperationKind, TextRange,
     };
 
     use super::ModuleBindingPromotion;
@@ -186,14 +186,12 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
-            UnwindTarget::Propagate,
         );
         let undefined = builder.operation_results(undefined)[0];
         builder.append_operation(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::InitializeBinding(InitializeBindingOp::new(binding)),
             [undefined],
-            UnwindTarget::Propagate,
         );
     }
 
@@ -286,7 +284,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
-                UnwindTarget::Propagate,
             );
         }
 
@@ -316,7 +313,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("eval")),
                 [],
-                UnwindTarget::Propagate,
             );
         }
 

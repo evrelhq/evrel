@@ -55,8 +55,8 @@ impl DestructureBindingOp {
         1
     }
 
-    pub(crate) const fn result_count(&self) -> usize {
-        0
+    pub(crate) fn result_count(&self) -> usize {
+        self.pattern.binding_ids().len()
     }
 }
 
@@ -102,7 +102,9 @@ impl DestructureAssignmentOp {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AssignmentPattern, AssignmentTarget, BindingId, BindingPattern, PatternExpression, RegionId,
+        AssignmentPattern, AssignmentTarget, BindingId, BindingKind, BindingPattern, ConstantOp,
+        ConstantValue, JsModuleIr, LocationId, ModuleBuilder, OperationKind, PatternExpression,
+        RegionId,
     };
 
     use super::{BindingWriteMode, DestructureAssignmentOp, DestructureBindingOp};
@@ -116,8 +118,51 @@ mod tests {
         assert_eq!(operation.mode(), BindingWriteMode::Initialize);
         assert_eq!(operation.pattern().binding_ids(), [binding]);
         assert_eq!(operation.operand_count(), 1);
-        assert_eq!(operation.result_count(), 0);
+        assert_eq!(operation.result_count(), 1);
         assert!(operation.effects().may_throw());
+    }
+
+    #[test]
+    fn allocates_one_result_for_each_binding_leaf() {
+        let mut module = JsModuleIr::new();
+        let function = module.entry_function();
+
+        let operation = {
+            let mut module_builder = ModuleBuilder::new(&mut module);
+            let first = module_builder.create_binding(function, "first", BindingKind::Const);
+            let second = module_builder.create_binding(function, "second", BindingKind::Const);
+            let mut builder = module_builder.function_builder(function);
+            let source = builder.append_operation(
+                LocationId::UNKNOWN,
+                OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
+                [],
+            );
+            let source = builder.operation_results(source)[0];
+            let operation = builder.append_operation(
+                LocationId::UNKNOWN,
+                OperationKind::DestructureBinding(DestructureBindingOp::new(
+                    BindingPattern::array(
+                        [
+                            Some(BindingPattern::binding(first)),
+                            Some(BindingPattern::binding(second)),
+                        ],
+                        None,
+                    ),
+                    BindingWriteMode::Initialize,
+                )),
+                [source],
+            );
+
+            operation
+        };
+
+        let operation = module
+            .function(function)
+            .unwrap()
+            .operation(operation)
+            .unwrap();
+
+        assert_eq!(operation.results().len(), 2);
     }
 
     #[test]

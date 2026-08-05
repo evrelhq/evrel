@@ -82,8 +82,8 @@ pub(super) fn emit_value_flow_step<'ast>(
         function,
         plan: function_plan,
     } = emission;
-    let JsValueFlowStep::Block {
-        block,
+    let JsValueFlowStep::Operations {
+        operations,
         continuation,
     } = step
     else {
@@ -100,16 +100,13 @@ pub(super) fn emit_value_flow_step<'ast>(
             builder,
         ));
     };
-    let block_data = function
-        .block(*block)
-        .ok_or(JsCodegenError::UnknownBlock { block: *block })?;
     let mut expressions = emit_operations_as_expressions(
         builder,
         module,
         output_plan,
         function,
         function_plan,
-        block_data.operations(),
+        operations,
     )?;
     let emit_branch = |edge: JsEdgeKey, next: &JsValueFlowStep| {
         let mut branch = emit_edge_transfer_expressions(builder, function, function_plan, edge)?;
@@ -291,76 +288,4 @@ pub(crate) fn emit_edge_transfer_expressions<'ast>(
     }
 
     Ok(expressions)
-}
-
-pub(super) fn emit_block_operations<'ast>(
-    builder: &AstBuilder<'ast>,
-    module: &JsModuleIr,
-    output_plan: &JsModulePlan,
-    function: &JsFunctionIr,
-    function_plan: &JsFunctionPlan,
-    statements: &mut ArenaVec<'ast, Statement<'ast>>,
-    block: BlockId,
-) -> Result<(), JsCodegenError> {
-    let block_data = function
-        .block(block)
-        .ok_or(JsCodegenError::UnknownBlock { block })?;
-
-    for &operation in block_data.operations() {
-        emit_operation(
-            builder,
-            module,
-            output_plan,
-            function,
-            function_plan,
-            statements,
-            operation,
-        )?;
-    }
-
-    let Some(terminator) = block_data.terminator() else {
-        return Ok(());
-    };
-    let terminator_data =
-        function
-            .operation(terminator)
-            .ok_or(JsCodegenError::UnknownOperation {
-                operation: terminator,
-            })?;
-
-    match terminator_data.kind() {
-        OperationKind::Jump(_)
-        | OperationKind::If(_)
-        | OperationKind::While(_)
-        | OperationKind::DoWhile(_)
-        | OperationKind::For(_)
-        | OperationKind::ForIn(_)
-        | OperationKind::ForOf(_)
-        | OperationKind::Switch(_)
-        | OperationKind::Try(_) => Ok(()),
-
-        OperationKind::Return(_)
-            if matches!(
-                function.kind(),
-                evrel_js_ir::FunctionKind::Module | evrel_js_ir::FunctionKind::ClassStaticBlock
-            ) =>
-        {
-            Ok(())
-        }
-
-        OperationKind::Return(_) | OperationKind::Throw(_) => emit_operation(
-            builder,
-            module,
-            output_plan,
-            function,
-            function_plan,
-            statements,
-            terminator,
-        ),
-
-        _ => Err(JsCodegenError::UnsupportedOperation {
-            operation: terminator,
-            reason: concat!(file!(), ":", line!()),
-        }),
-    }
 }

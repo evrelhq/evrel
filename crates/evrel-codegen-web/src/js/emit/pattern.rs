@@ -148,12 +148,12 @@ fn collect_parameter_region_locals(
             .block(block)
             .ok_or(JsCodegenError::UnsupportedExpressionRegion { region })?;
 
-        for &operation in block.operations() {
+        for &operation_id in block.operations() {
             let operation = function
-                .operation(operation)
+                .operation(operation_id)
                 .ok_or(JsCodegenError::UnsupportedExpressionRegion { region })?;
 
-            for &result in operation.results() {
+            for &result in plan.operation(operation_id).result_destinations() {
                 if let Some(crate::js::plan::JsValueRepresentation::Temporary(local)) =
                     plan.value(result)
                     && plan.local_name(local).is_some()

@@ -14,7 +14,7 @@ use oxc_span::SPAN;
 use crate::{
     JsCodegenError,
     js::emit::unary::{emit_typeof_expression, emit_unary_expression},
-    js::plan::{JsFunctionPlan, JsModulePlan, JsOperationPlan, JsValueRepresentation},
+    js::plan::{JsFunctionPlan, JsModulePlan, JsOperationStatementPlan, JsValueRepresentation},
 };
 
 use super::{
@@ -63,9 +63,9 @@ pub(crate) fn emit_operation<'ast>(
     statements: &mut ArenaVec<'ast, Statement<'ast>>,
     operation: OperationId,
 ) -> Result<(), JsCodegenError> {
-    match function_plan.operation(operation) {
-        Some(JsOperationPlan::Omitted) => return Ok(()),
-        Some(JsOperationPlan::FunctionDeclaration { function, binding }) => {
+    match function_plan.operation(operation).statement() {
+        JsOperationStatementPlan::Omitted => return Ok(()),
+        JsOperationStatementPlan::FunctionDeclaration { function, binding } => {
             let name = function_plan
                 .binding_name(binding)
                 .ok_or(JsCodegenError::UnknownBinding { binding })?;
@@ -78,7 +78,7 @@ pub(crate) fn emit_operation<'ast>(
             )?);
             return Ok(());
         }
-        Some(JsOperationPlan::VarDeclaration) | None => {}
+        JsOperationStatementPlan::Ordinary | JsOperationStatementPlan::VarDeclaration => {}
     }
 
     statements.push(emit_operation_statement(
@@ -102,20 +102,29 @@ fn emit_operation_statement<'ast>(
     let operation_data = function
         .operation(operation)
         .ok_or(JsCodegenError::UnknownOperation { operation })?;
+    let results = plan.operation(operation).result_destinations();
+    let kind = match operation_data.kind() {
+        OperationKind::Invoke(invoke) => invoke.operation(),
+        kind => kind,
+    };
 
-    match operation_data.kind() {
-        OperationKind::Constant(constant) => Ok(Statement::new_expression_statement(
-            SPAN,
-            emit_constant_expression(builder, constant.value()),
-            builder,
-        )),
-
-        OperationKind::RegExpLiteral(literal) => {
-            let [] = operation_data.operands() else {
+    match kind {
+        OperationKind::Constant(constant) => {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let expression = emit_constant_expression(builder, constant.value());
+
+            emit_result_statement(builder, plan, *result, expression)
+        }
+
+        OperationKind::RegExpLiteral(literal) => {
+            let [] = operation_data.operation_operands() else {
+                return Err(JsCodegenError::MalformedOperation { operation });
+            };
+
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -125,10 +134,10 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::ArrayLiteral(array) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression =
@@ -138,10 +147,10 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::TemplateLiteral(template) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression = emit_template_literal_expression(emission, template)?;
@@ -150,24 +159,24 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::TaggedTemplate(template) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression = emit_tagged_template_expression(
                 emission,
                 operation,
                 template,
-                operation_data.operands(),
+                operation_data.operation_operands(),
             )?;
 
             emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::ObjectLiteral(object) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression = emit_object_literal_expression(
@@ -183,39 +192,39 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::JsxElement(element) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression = emit_jsx_element_expression(
                 emission,
                 operation,
                 element,
-                operation_data.operands(),
+                operation_data.operation_operands(),
             )?;
 
             emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::JsxFragment(fragment) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression = emit_jsx_fragment_expression(
                 emission,
                 operation,
                 fragment,
-                operation_data.operands(),
+                operation_data.operation_operands(),
             )?;
 
             emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::CreateFunction(create) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -226,10 +235,10 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::CreateClass(class) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression =
@@ -239,60 +248,54 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::LoadThis(_) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [_] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            Ok(Statement::new_expression_statement(
-                SPAN,
-                emit_load_this_expression(builder),
-                builder,
-            ))
+            let expression = emit_load_this_expression(builder);
+
+            emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::LoadArguments(_) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [_] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            Ok(Statement::new_expression_statement(
-                SPAN,
-                emit_load_arguments_expression(builder),
-                builder,
-            ))
+            let expression = emit_load_arguments_expression(builder);
+
+            emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::MetaProperty(meta) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [_] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            Ok(Statement::new_expression_statement(
-                SPAN,
-                emit_meta_property_expression(builder, meta),
-                builder,
-            ))
+            let expression = emit_meta_property_expression(builder, meta);
+
+            emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::DynamicImport(import) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
             let (source, options) = if import.has_options() {
-                let [source, options] = operation_data.operands() else {
+                let [source, options] = operation_data.operation_operands() else {
                     return Err(JsCodegenError::MalformedOperation { operation });
                 };
 
@@ -301,7 +304,7 @@ fn emit_operation_statement<'ast>(
                     Some(emit_value_expression(builder, function, plan, *options)?),
                 )
             } else {
-                let [source] = operation_data.operands() else {
+                let [source] = operation_data.operation_operands() else {
                     return Err(JsCodegenError::MalformedOperation { operation });
                 };
 
@@ -317,10 +320,10 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::HasPrivateName(check) => {
-            let [object] = operation_data.operands() else {
+            let [object] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression =
@@ -330,11 +333,11 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::IsNullish(_) => {
-            let [operand] = operation_data.operands() else {
+            let [operand] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -344,11 +347,11 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::Unary(unary) => {
-            let [operand] = operation_data.operands() else {
+            let [operand] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -363,16 +366,16 @@ fn emit_operation_statement<'ast>(
             emission,
             operation,
             update,
-            operation_data.operands(),
-            operation_data.results(),
+            operation_data.operation_operands(),
+            results,
         ),
 
         OperationKind::Binary(binary) => {
-            let [left, right] = operation_data.operands() else {
+            let [left, right] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -384,7 +387,7 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::Typeof(typeof_operation) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -392,20 +395,20 @@ fn emit_operation_statement<'ast>(
                 emission,
                 operation,
                 typeof_operation,
-                operation_data.operands(),
+                operation_data.operation_operands(),
             )?;
 
             emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::Delete(delete) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
             let expression = match delete.target() {
                 DeleteTarget::Value => {
-                    let [value] = operation_data.operands() else {
+                    let [value] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let value = emit_value_expression(builder, function, plan, *value)?;
@@ -414,7 +417,7 @@ fn emit_operation_statement<'ast>(
                 }
 
                 DeleteTarget::Property(PropertyKey::Static(name)) => {
-                    let [object] = operation_data.operands() else {
+                    let [object] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let object = emit_value_expression(builder, function, plan, *object)?;
@@ -424,7 +427,7 @@ fn emit_operation_statement<'ast>(
                 }
 
                 DeleteTarget::Property(PropertyKey::Computed) => {
-                    let [object, key] = operation_data.operands() else {
+                    let [object, key] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let object = emit_value_expression(builder, function, plan, *object)?;
@@ -453,11 +456,11 @@ fn emit_operation_statement<'ast>(
                 });
             }
 
-            let [value] = operation_data.operands() else {
+            let [value] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -475,11 +478,11 @@ fn emit_operation_statement<'ast>(
                 });
             }
 
-            let [value] = operation_data.operands() else {
+            let [value] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -490,21 +493,25 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::Call(call) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let expression =
-                emit_call_expression(emission, operation, call, operation_data.operands())?;
+            let expression = emit_call_expression(
+                emission,
+                operation,
+                call,
+                operation_data.operation_operands(),
+            )?;
 
             emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::SuperCall(call) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression = emit_super_call_expression(emission, call)?;
@@ -513,28 +520,30 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::Construct(construct) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let expression = emit_construct_expression(
                 emission,
                 operation,
                 construct,
-                operation_data.operands(),
+                operation_data.operation_operands(),
             )?;
             emit_result_statement(builder, plan, *result, expression)
         }
 
         OperationKind::InitializeBinding(initialize) => {
-            let [value] = operation_data.operands() else {
+            let [value] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [] = operation_data.results() else {
+            let [] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let value = if plan.operation(operation) == Some(JsOperationPlan::VarDeclaration) {
+            let value = if plan.operation(operation).statement()
+                == JsOperationStatementPlan::VarDeclaration
+            {
                 None
             } else {
                 Some(emit_operand_expression(
@@ -561,22 +570,24 @@ fn emit_operation_statement<'ast>(
             emission,
             operation,
             destructure,
-            operation_data.operands(),
+            operation_data.operation_operands(),
+            results,
         ),
 
         OperationKind::DestructureAssignment(destructure) => emit_destructure_assignment_statement(
             emission,
             operation,
             destructure,
-            operation_data.operands(),
+            operation_data.operation_operands(),
+            results,
         ),
 
         OperationKind::LoadBinding(load) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -586,11 +597,11 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::StoreBinding(store) => {
-            let [value] = operation_data.operands() else {
+            let [value] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [] = operation_data.results() else {
+            let [] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -603,7 +614,7 @@ fn emit_operation_statement<'ast>(
         OperationKind::LoadGlobal(global) => {
             let expression = emit_load_global_expression(builder, global);
 
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -611,13 +622,13 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::LoadProperty(load) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
             let member = match load.key() {
                 PropertyKey::Static(name) => {
-                    let [object] = operation_data.operands() else {
+                    let [object] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
 
@@ -627,7 +638,7 @@ fn emit_operation_statement<'ast>(
                 }
 
                 PropertyKey::Computed => {
-                    let [object, key] = operation_data.operands() else {
+                    let [object, key] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
 
@@ -638,7 +649,7 @@ fn emit_operation_statement<'ast>(
                 }
 
                 PropertyKey::Private(private_name) => {
-                    let [object] = operation_data.operands() else {
+                    let [object] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let object = emit_value_expression(builder, function, plan, *object)?;
@@ -653,13 +664,13 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::StoreProperty(store) => {
-            let [] = operation_data.results() else {
+            let [] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
             let (member, value) = match store.key() {
                 PropertyKey::Static(name) => {
-                    let [object, value] = operation_data.operands() else {
+                    let [object, value] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
 
@@ -677,7 +688,7 @@ fn emit_operation_statement<'ast>(
                 }
 
                 PropertyKey::Computed => {
-                    let [object, key, value] = operation_data.operands() else {
+                    let [object, key, value] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
 
@@ -696,7 +707,7 @@ fn emit_operation_statement<'ast>(
                 }
 
                 PropertyKey::Private(private_name) => {
-                    let [object, value] = operation_data.operands() else {
+                    let [object, value] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let object = emit_value_expression(builder, function, plan, *object)?;
@@ -720,19 +731,19 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::LoadSuperProperty(load) => {
-            let [result] = operation_data.results() else {
+            let [result] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let object = Expression::new_super(SPAN, builder);
             let member = match load.key() {
                 SuperPropertyKey::Static(name) => {
-                    let [] = operation_data.operands() else {
+                    let [] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     emit_static_member_expression(builder, object, name)
                 }
                 SuperPropertyKey::Computed => {
-                    let [key] = operation_data.operands() else {
+                    let [key] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let key = emit_value_expression(builder, function, plan, *key)?;
@@ -745,20 +756,20 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::StoreSuperProperty(store) => {
-            let [] = operation_data.results() else {
+            let [] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
             let object = Expression::new_super(SPAN, builder);
             let (member, value) = match store.key() {
                 SuperPropertyKey::Static(name) => {
-                    let [value] = operation_data.operands() else {
+                    let [value] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let value = emit_value_expression(builder, function, plan, *value)?;
                     (emit_static_member_expression(builder, object, name), value)
                 }
                 SuperPropertyKey::Computed => {
-                    let [key, value] = operation_data.operands() else {
+                    let [key, value] = operation_data.operation_operands() else {
                         return Err(JsCodegenError::MalformedOperation { operation });
                     };
                     let key = emit_value_expression(builder, function, plan, *key)?;
@@ -771,7 +782,7 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::StoreGlobal(global) => {
-            let [value] = operation_data.operands() else {
+            let [value] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -795,11 +806,11 @@ fn emit_operation_statement<'ast>(
                 });
             }
 
-            let [value] = operation_data.operands() else {
+            let [value] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [] = operation_data.results() else {
+            let [] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -809,11 +820,11 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::Throw(_) => {
-            let [value] = operation_data.operands() else {
+            let [value] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [] = operation_data.results() else {
+            let [] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
@@ -823,11 +834,11 @@ fn emit_operation_statement<'ast>(
         }
 
         OperationKind::Debugger(_) => {
-            let [] = operation_data.operands() else {
+            let [] = operation_data.operation_operands() else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 
-            let [] = operation_data.results() else {
+            let [] = results else {
                 return Err(JsCodegenError::MalformedOperation { operation });
             };
 

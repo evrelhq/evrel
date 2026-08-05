@@ -109,6 +109,65 @@ fn direct_eval_keeps_the_callers_lexical_environment() {
 }
 
 #[test]
+fn invoked_operations_preserve_native_try_semantics() {
+    assert_same_result(
+        r#"
+        function read(object, key) {
+            try {
+                return object[key]();
+            } catch (error) {
+                return `caught:${error.message}`;
+            }
+        }
+
+        console.log(read({ value: () => 42 }, "value"));
+        console.log(read({ get value() { throw new Error("failure"); } }, "value"));
+        "#,
+    );
+}
+
+#[test]
+fn invoked_direct_eval_keeps_the_callers_lexical_environment() {
+    assert_same_result(
+        r#"
+        function read() {
+            const local = 41;
+            try {
+                return eval("local + 1");
+            } catch {
+                return 0;
+            }
+        }
+        console.log(read());
+        "#,
+    );
+}
+
+#[test]
+fn invoked_operations_work_inside_loop_tests() {
+    assert_same_result(
+        r#"
+        let remaining = 2;
+        const iterator = {
+            next() {
+                if (remaining === 0) throw new Error("done");
+                remaining--;
+                return true;
+            }
+        };
+
+        try {
+            while (iterator.next()) {
+                console.log(remaining);
+            }
+        } catch (error) {
+            console.log(error.message);
+        }
+        "#,
+    );
+}
+
+#[test]
 fn single_use_function_and_class_creations_preserve_behavior() {
     assert_same_result(
         r#"

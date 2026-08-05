@@ -8,12 +8,9 @@ use crate::js::work_queue::WorkQueue;
 
 /// Removes unused operations whose evaluation is proven unobservable.
 ///
-/// Returns zero when the function's value flow cannot be modeled soundly.
 pub fn eliminate_dead_code(function: &mut JsFunctionIr) -> usize {
     let removals = {
-        let Ok(values) = FunctionValueAnalysis::compute(function) else {
-            return 0;
-        };
+        let values = FunctionValueAnalysis::compute(function);
 
         plan_dead_operations(function, &values)
     };
@@ -99,7 +96,7 @@ fn is_dead(
 mod tests {
     use evrel_js_ir::{
         BinaryOp, BinaryOperator, ConstantOp, ConstantValue, DebuggerOp, JsModuleIr, LoadGlobalOp,
-        ModuleBuilder, OperationKind, ReturnOp, UnwindTarget, ValueId,
+        ModuleBuilder, OperationKind, ReturnOp, ValueId,
     };
 
     use super::eliminate_dead_code;
@@ -122,7 +119,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left_value, right_value],
-                UnwindTarget::Propagate,
             );
 
             let returned = append_undefined(&mut builder);
@@ -130,7 +126,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
-                UnwindTarget::Propagate,
             );
 
             (left, right, addition)
@@ -165,7 +160,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Debugger(DebuggerOp::new()),
                 [],
-                UnwindTarget::Propagate,
             );
 
             let returned = append_undefined(&mut builder);
@@ -173,7 +167,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
-                UnwindTarget::Propagate,
             );
 
             debugger
@@ -205,7 +198,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
                 [],
-                UnwindTarget::Propagate,
             );
             let left = builder.operation_results(left)[0];
             let right = append_number(&mut builder, 1.0);
@@ -214,7 +206,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
-                UnwindTarget::Propagate,
             );
 
             let returned = append_undefined(&mut builder);
@@ -222,7 +213,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned],
-                UnwindTarget::Propagate,
             );
 
             addition
@@ -249,7 +239,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
-            UnwindTarget::Propagate,
         )
     }
 
@@ -264,7 +253,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]

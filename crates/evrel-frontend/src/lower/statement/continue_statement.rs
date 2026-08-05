@@ -1,6 +1,5 @@
 //! JavaScript `continue` statement lowering.
 
-use evrel_js_ir::{BlockTarget, JumpOp, OperationKind};
 use oxc_ast::ast::ContinueStatement;
 
 use crate::{FrontendError, lower::FunctionLowerer};
@@ -15,10 +14,7 @@ pub(super) fn lower_continue_statement(
         .continue_target(label)
         .expect("Oxc semantic analysis must validate continue targets");
 
-    lowerer.terminate(
-        OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
-        [],
-    );
+    lowerer.terminate_continue(target);
 
     Ok(())
 }

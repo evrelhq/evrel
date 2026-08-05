@@ -1,6 +1,5 @@
 //! JavaScript `throw` statement lowering.
 
-use evrel_js_ir::{OperationKind, ThrowOp};
 use oxc_ast::ast::ThrowStatement;
 
 use crate::{
@@ -15,7 +14,7 @@ pub(super) fn lower_throw_statement(
 ) -> Result<(), FrontendError> {
     let value = lower_expression(lowerer, &statement.argument)?;
 
-    lowerer.terminate(OperationKind::Throw(ThrowOp::new()), [value]);
+    lowerer.terminate_throw(value);
 
     Ok(())
 }

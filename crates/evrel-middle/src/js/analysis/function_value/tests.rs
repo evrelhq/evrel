@@ -1,7 +1,6 @@
 use evrel_js_ir::{
     BinaryOp, BinaryOperator, BlockParameterSource, BlockTarget, ConstantOp, ConstantValue, IfOp,
-    JsModuleIr, JumpOp, LoadGlobalOp, ModuleBuilder, OperationKind, ReturnOp, UnwindTarget,
-    ValueId,
+    JsModuleIr, JumpOp, LoadGlobalOp, ModuleBuilder, OperationKind, ReturnOp, ValueId,
 };
 
 use super::FunctionValueInputs;
@@ -22,7 +21,6 @@ fn propagates_constants_through_straight_line_ssa() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [left, right],
-            UnwindTarget::Propagate,
         );
         let result = builder.operation_results(addition)[0];
 
@@ -30,7 +28,6 @@ fn propagates_constants_through_straight_line_ssa() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
-            UnwindTarget::Propagate,
         );
 
         result
@@ -39,8 +36,7 @@ fn propagates_constants_through_straight_line_ssa() {
     let analysis = SparseValueAnalysis::compute(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
-    )
-    .unwrap();
+    );
 
     assert_eq!(
         analysis.value(result).constant(),
@@ -59,7 +55,11 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
         let then_block = builder.create_block();
         let else_block = builder.create_block();
         let join_block = builder.create_block();
-        let joined = builder.append_block_parameter(join_block, BlockParameterSource::Forwarded);
+        let joined = builder.append_block_parameter(
+            join_block,
+            BlockParameterSource::Forwarded,
+            evrel_js_ir::ValueType::JsValue,
+        );
 
         let condition = append_boolean(&mut builder, true);
         let branch = builder.terminate(
@@ -70,7 +70,6 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
                 join_block,
             )),
             [condition],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(then_block);
@@ -79,7 +78,6 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [then_value],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(else_block);
@@ -88,7 +86,6 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [else_value],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(join_block);
@@ -96,7 +93,6 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [joined],
-            UnwindTarget::Propagate,
         );
 
         (branch, then_block, else_block, joined)
@@ -105,8 +101,7 @@ fn follows_only_the_selected_edge_of_a_constant_branch() {
     let analysis = SparseValueAnalysis::compute(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
-    )
-    .unwrap();
+    );
 
     assert!(analysis.is_edge_executable(branch, 0));
     assert!(!analysis.is_edge_executable(branch, 1));
@@ -124,8 +119,7 @@ fn retains_an_equal_constant_from_multiple_executable_edges() {
     let analysis = SparseValueAnalysis::compute(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
-    )
-    .unwrap();
+    );
 
     assert_eq!(
         analysis.value(joined).constant(),
@@ -139,8 +133,7 @@ fn loses_constant_information_at_a_conflicting_join() {
     let analysis = SparseValueAnalysis::compute(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
-    )
-    .unwrap();
+    );
 
     assert_eq!(analysis.value(joined).constant(), None);
     assert!(!analysis.value(joined).is_bottom());
@@ -157,7 +150,11 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
         let header = builder.create_block();
         let body = builder.create_block();
         let exit = builder.create_block();
-        let carried = builder.append_block_parameter(header, BlockParameterSource::Forwarded);
+        let carried = builder.append_block_parameter(
+            header,
+            BlockParameterSource::Forwarded,
+            evrel_js_ir::ValueType::JsValue,
+        );
 
         let initial = append_number(&mut builder, 1.0);
         let backedge = append_number(&mut builder, 2.0);
@@ -166,7 +163,6 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
             [initial],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(header);
@@ -174,14 +170,12 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [carried, zero],
-            UnwindTarget::Propagate,
         );
         let derived = builder.operation_results(derived)[0];
         let condition = builder.append_operation(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new("repeat")),
             [],
-            UnwindTarget::Propagate,
         );
         let condition = builder.operation_results(condition)[0];
         builder.terminate(
@@ -192,7 +186,6 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
                 exit,
             )),
             [condition],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(body);
@@ -200,7 +193,6 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(header, 1))),
             [backedge],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(exit);
@@ -208,7 +200,6 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [derived],
-            UnwindTarget::Propagate,
         );
 
         (carried, derived)
@@ -217,8 +208,7 @@ fn revisits_loop_users_when_a_backedge_changes_a_parameter() {
     let analysis = SparseValueAnalysis::compute(
         module.function(function).unwrap(),
         &FunctionValueInputs::new(),
-    )
-    .unwrap();
+    );
 
     assert_eq!(analysis.value(carried).constant(), None);
     assert!(!analysis.value(carried).is_bottom());
@@ -239,13 +229,16 @@ fn build_dynamic_diamond(
         let then_block = builder.create_block();
         let else_block = builder.create_block();
         let join_block = builder.create_block();
-        let joined = builder.append_block_parameter(join_block, BlockParameterSource::Forwarded);
+        let joined = builder.append_block_parameter(
+            join_block,
+            BlockParameterSource::Forwarded,
+            evrel_js_ir::ValueType::JsValue,
+        );
 
         let condition = builder.append_operation(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new("condition")),
             [],
-            UnwindTarget::Propagate,
         );
         let condition = builder.operation_results(condition)[0];
         builder.terminate(
@@ -256,7 +249,6 @@ fn build_dynamic_diamond(
                 join_block,
             )),
             [condition],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(then_block);
@@ -265,7 +257,6 @@ fn build_dynamic_diamond(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [then_value],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(else_block);
@@ -274,7 +265,6 @@ fn build_dynamic_diamond(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [else_value],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(join_block);
@@ -282,7 +272,6 @@ fn build_dynamic_diamond(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [joined],
-            UnwindTarget::Propagate,
         );
 
         joined
@@ -296,7 +285,6 @@ fn append_number(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: f64) -> 
         evrel_js_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
         [],
-        UnwindTarget::Propagate,
     );
 
     builder.operation_results(operation)[0]
@@ -307,7 +295,6 @@ fn append_boolean(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: bool) -
         evrel_js_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(value))),
         [],
-        UnwindTarget::Propagate,
     );
 
     builder.operation_results(operation)[0]

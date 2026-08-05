@@ -3,8 +3,8 @@
 use std::collections::{HashMap, HashSet};
 
 use evrel_js_ir::{
-    BindingId, FunctionId, JsFunctionIr, JsModuleIr, OperationId, OperationKind, RegionId,
-    ValueDefinition, ValueId,
+    BindingId, BlockParameterSource, FunctionId, JsFunctionIr, JsModuleIr, OperationData,
+    OperationId, OperationKind, RegionId, ValueDefinition, ValueId, ValueType,
 };
 
 use crate::{
@@ -14,7 +14,8 @@ use crate::{
 
 use super::{
     DenseMap, JsControlPlan, JsEdgeKey, JsEdgeTransfer, JsExpressionRegionPlan, JsLocalAllocator,
-    JsLocalId, JsNamePlan, JsOperationPlan, JsValueRepresentation, build_edge_transfers,
+    JsLocalId, JsNamePlan, JsOperationPlan, JsOperationStatementPlan, JsValueRepresentation,
+    build_edge_transfers,
 };
 
 /// JavaScript representation decisions for one function.
@@ -40,6 +41,10 @@ impl JsFunctionPlan {
         let mut locals = JsLocalAllocator::default();
 
         for (value_id, value) in function.values() {
+            if value.ty() == ValueType::Completion {
+                continue;
+            }
+
             if let ValueDefinition::FunctionParameter { parameter_index } = *value.definition() {
                 let parameter = function
                     .parameters()
@@ -63,8 +68,10 @@ impl JsFunctionPlan {
                     .and_then(|block| block.parameters().get(parameter_index as usize))
                     .ok_or(JsCodegenError::UnsupportedValue { value: value_id })?;
 
-                let local = locals.allocate();
-                values.insert(value_id, JsValueRepresentation::Temporary(local));
+                let representation =
+                    invoke_result_representation(function, block, parameter_index, value_id)
+                        .unwrap_or_else(|| JsValueRepresentation::Temporary(locals.allocate()));
+                values.insert(value_id, representation);
                 continue;
             }
 
@@ -79,6 +86,17 @@ impl JsFunctionPlan {
             let operation_data = function
                 .operation(operation)
                 .ok_or(JsCodegenError::UnknownOperation { operation })?;
+
+            if let OperationKind::DestructureBinding(destructure) = operation_data.kind()
+                && let Some(binding) = destructure
+                    .pattern()
+                    .binding_ids()
+                    .get(result_index as usize)
+                    .copied()
+            {
+                values.insert(value_id, JsValueRepresentation::Binding(binding));
+                continue;
+            }
 
             if matches!(operation_data.kind(), OperationKind::Update(_)) && result_index < 2 {
                 let local = locals.allocate();
@@ -131,24 +149,33 @@ impl JsFunctionPlan {
         }
         let mut operations = DenseMap::new();
         for (operation_id, operation) in function.operations() {
-            let operation_plan = match operation.kind() {
+            let results = operation_result_destinations(function, operation_id, operation)?;
+            let (kind, invoked) = match operation.kind() {
+                OperationKind::Invoke(invoke) => (invoke.operation(), true),
+                kind => (kind, false),
+            };
+            let statement = match kind {
                 OperationKind::Constant(_)
                 | OperationKind::LoadThis(_)
                 | OperationKind::LoadArguments(_)
-                | OperationKind::MetaProperty(_) => Some(JsOperationPlan::Omitted),
+                | OperationKind::MetaProperty(_)
+                    if !invoked =>
+                {
+                    JsOperationStatementPlan::Omitted
+                }
                 OperationKind::CreateFunction(_) | OperationKind::CreateClass(_)
-                    if operation.results().first().is_some_and(|result| {
+                    if results.first().is_some_and(|result| {
                         values.get(*result).copied() == Some(JsValueRepresentation::CreationAtUse)
                     }) =>
                 {
-                    Some(JsOperationPlan::Omitted)
+                    JsOperationStatementPlan::Omitted
                 }
                 OperationKind::LoadGlobal(_)
-                    if operation.results().first().is_some_and(|result| {
+                    if results.first().is_some_and(|result| {
                         values.get(*result).copied() == Some(JsValueRepresentation::DirectEval)
                     }) =>
                 {
-                    Some(JsOperationPlan::Omitted)
+                    JsOperationStatementPlan::Omitted
                 }
                 OperationKind::InitializeBinding(initialize)
                     if is_hoisted_function_initialization(
@@ -168,10 +195,10 @@ impl JsFunctionPlan {
                             operation: operation_id,
                         });
                     };
-                    Some(JsOperationPlan::FunctionDeclaration {
+                    JsOperationStatementPlan::FunctionDeclaration {
                         function,
                         binding: initialize.binding(),
-                    })
+                    }
                 }
                 OperationKind::InitializeBinding(initialize)
                     if module
@@ -182,13 +209,11 @@ impl JsFunctionPlan {
                             .first()
                             .is_some_and(|value| is_undefined(function, *value)) =>
                 {
-                    Some(JsOperationPlan::VarDeclaration)
+                    JsOperationStatementPlan::VarDeclaration
                 }
-                _ => None,
+                _ => JsOperationStatementPlan::Ordinary,
             };
-            if let Some(operation_plan) = operation_plan {
-                operations.insert(operation_id, operation_plan);
-            }
+            operations.insert(operation_id, JsOperationPlan::new(statement, results));
         }
         let control = JsControlPlan::build(function_id, function, &values, &mut locals)?;
         let mut regions = DenseMap::new();
@@ -255,8 +280,10 @@ impl JsFunctionPlan {
         self.regions.get(region)
     }
 
-    pub(crate) fn operation(&self, operation: OperationId) -> Option<JsOperationPlan> {
-        self.operations.get(operation).copied()
+    pub(crate) fn operation(&self, operation: OperationId) -> &JsOperationPlan {
+        self.operations
+            .get(operation)
+            .expect("every live operation must have an output plan")
     }
 
     pub(crate) const fn local_count(&self) -> usize {
@@ -274,6 +301,86 @@ impl JsFunctionPlan {
     pub(crate) fn local_name(&self, local: JsLocalId) -> Option<&str> {
         self.names.local(local)
     }
+}
+
+fn operation_result_destinations(
+    function: &JsFunctionIr,
+    operation_id: OperationId,
+    operation: &OperationData,
+) -> Result<Box<[ValueId]>, JsCodegenError> {
+    if !matches!(operation.kind(), OperationKind::Invoke(_)) {
+        return Ok(operation.results().into());
+    }
+
+    let normal =
+        operation
+            .successors()
+            .first()
+            .copied()
+            .ok_or(JsCodegenError::MalformedOperation {
+                operation: operation_id,
+            })?;
+    let block = function
+        .block(normal.target().block())
+        .ok_or(JsCodegenError::UnknownBlock {
+            block: normal.target().block(),
+        })?;
+    let parameters = block
+        .parameters()
+        .get(..normal.produced_argument_count())
+        .ok_or(JsCodegenError::MalformedOperation {
+            operation: operation_id,
+        })?;
+
+    if parameters
+        .iter()
+        .any(|parameter| parameter.source() != BlockParameterSource::Produced)
+    {
+        return Err(JsCodegenError::MalformedOperation {
+            operation: operation_id,
+        });
+    }
+
+    Ok(parameters
+        .iter()
+        .map(|parameter| parameter.value())
+        .collect())
+}
+
+fn invoke_result_representation(
+    function: &JsFunctionIr,
+    block: evrel_js_ir::BlockId,
+    parameter_index: u32,
+    value: ValueId,
+) -> Option<JsValueRepresentation> {
+    function.operations().find_map(|(_, operation)| {
+        let OperationKind::Invoke(invoke) = operation.kind() else {
+            return None;
+        };
+
+        if invoke.normal_target().block() != block
+            || parameter_index as usize >= invoke.operation().result_count()
+        {
+            return None;
+        }
+
+        match invoke.operation() {
+            OperationKind::DestructureBinding(destructure) => destructure
+                .pattern()
+                .binding_ids()
+                .get(parameter_index as usize)
+                .copied()
+                .map(JsValueRepresentation::Binding),
+            OperationKind::LoadGlobal(global)
+                if parameter_index == 0
+                    && global.name() == "eval"
+                    && is_direct_eval_use(function, value) =>
+            {
+                Some(JsValueRepresentation::DirectEval)
+            }
+            _ => None,
+        }
+    })
 }
 
 fn created_function(
@@ -415,7 +522,7 @@ fn is_direct_eval_use(function: &JsFunctionIr, value: ValueId) -> bool {
     };
 
     matches!(
-        user.kind(),
+        executed_operation(user),
         OperationKind::Call(call)
             if matches!(
                 call.target(),
@@ -424,4 +531,11 @@ fn is_direct_eval_use(function: &JsFunctionIr, value: ValueId) -> bool {
                 }
             )
     )
+}
+
+fn executed_operation(operation: &OperationData) -> &OperationKind {
+    match operation.kind() {
+        OperationKind::Invoke(invoke) => invoke.operation(),
+        kind => kind,
+    }
 }

@@ -41,17 +41,14 @@ pub(super) fn emit_control_sequence_as_expressions<'ast>(
 
     for step in sequence.steps() {
         match step {
-            JsControlStep::Block(block) => {
-                let block_data = function
-                    .block(*block)
-                    .ok_or(JsCodegenError::UnknownBlock { block: *block })?;
+            JsControlStep::Operations(operations) => {
                 expressions.extend(emit_operations_as_expressions(
                     builder,
                     module,
                     output_plan,
                     function,
                     function_plan,
-                    block_data.operations(),
+                    operations,
                 )?);
             }
             JsControlStep::Edge(edge) => expressions.extend(emit_edge_transfer_expressions(
@@ -146,14 +143,14 @@ pub(super) fn emit_for_initializer_sequence<'ast>(
 
     for step in sequence.steps() {
         match step {
-            JsControlStep::Block(block) => emit_block_operations(
+            JsControlStep::Operations(operations) => emit_operations(
                 builder,
                 module,
                 output_plan,
                 function,
                 function_plan,
                 &mut statements,
-                *block,
+                operations,
             )?,
             JsControlStep::Edge(edge) => {
                 emit_edge_transfer(builder, function, function_plan, &mut statements, *edge)?;

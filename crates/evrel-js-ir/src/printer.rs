@@ -12,7 +12,7 @@ use crate::{
     LabeledStatementId, MetaPropertyKind, ObjectAssignmentProperty, ObjectBindingProperty,
     ObjectLiteralEntry, ObjectLiteralKey, ObjectMethodKind, OperationData, OperationKind,
     PrivateNameData, PrivateNameId, PropertyKey, RegionId, RegionOwner, SuperPropertyKey,
-    TypeofTarget, UnaryOperator, UnwindTarget, UpdateOperator, ValueId, YieldKind,
+    TypeofTarget, UnaryOperator, UpdateOperator, ValueId, YieldKind,
 };
 
 /// Formats a module using Evrel's canonical textual IR representation.
@@ -405,7 +405,12 @@ impl<'ir> FunctionPrinter<'ir> {
             format!("{results} = ")
         };
 
-        let body = match operation.kind() {
+        let operands = operation.operation_operands();
+        let (kind, invoke) = match operation.kind() {
+            OperationKind::Invoke(invoke) => (invoke.operation(), Some(invoke.as_ref())),
+            kind => (kind, None),
+        };
+        let body = match kind {
             OperationKind::Constant(operation) => match operation.value() {
                 ConstantValue::Undefined => "constant undefined".to_owned(),
                 ConstantValue::Boolean(value) => format!("constant {value}"),
@@ -440,7 +445,6 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::TaggedTemplate(template) => {
-                let operands = operation.operands();
                 let (target, receiver) = print_call_target(template.target(), operands);
                 let target = match receiver {
                     Some(receiver) => {
@@ -543,7 +547,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::JsxElement(element) => {
-                let name = print_jsx_element_name(element.name(), operation.operands());
+                let name = print_jsx_element_name(element.name(), operands);
                 let attributes = element
                     .attributes()
                     .iter()
@@ -612,7 +616,7 @@ impl<'ir> FunctionPrinter<'ir> {
                     DynamicImportPhase::Defer => "dynamic_import.defer",
                 };
 
-                match operation.operands() {
+                match operands {
                     [source] if !import.has_options() => {
                         format!("{phase} {}", print_value(*source))
                     }
@@ -628,7 +632,7 @@ impl<'ir> FunctionPrinter<'ir> {
             OperationKind::Debugger(_) => "debugger".to_owned(),
 
             OperationKind::InitializeBinding(binding) => {
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("binding initialization has one operand");
                 };
 
@@ -640,7 +644,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::DestructureBinding(destructure) => {
-                let [source] = operation.operands() else {
+                let [source] = operands else {
                     unreachable!("binding destructuring has one source operand");
                 };
                 let mode = match destructure.mode() {
@@ -656,7 +660,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::DestructureAssignment(destructure) => {
-                let [source] = operation.operands() else {
+                let [source] = operands else {
                     unreachable!("assignment destructuring has one source operand");
                 };
 
@@ -672,7 +676,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::StoreBinding(binding) => {
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("binding stores have one operand");
                 };
 
@@ -688,7 +692,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::StoreGlobal(global) => {
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("global stores have one operand");
                 };
 
@@ -697,7 +701,7 @@ impl<'ir> FunctionPrinter<'ir> {
 
             OperationKind::LoadProperty(property) => match property.key() {
                 PropertyKey::Static(name) => {
-                    let [object] = operation.operands() else {
+                    let [object] = operands else {
                         unreachable!("static property reads have one operand");
                     };
 
@@ -705,7 +709,7 @@ impl<'ir> FunctionPrinter<'ir> {
                 }
 
                 PropertyKey::Computed => {
-                    let [object, key] = operation.operands() else {
+                    let [object, key] = operands else {
                         unreachable!("computed property reads have two operands");
                     };
 
@@ -717,7 +721,7 @@ impl<'ir> FunctionPrinter<'ir> {
                 }
 
                 PropertyKey::Private(private_name) => {
-                    let [object] = operation.operands() else {
+                    let [object] = operands else {
                         unreachable!("private property reads have one operand");
                     };
 
@@ -735,7 +739,7 @@ impl<'ir> FunctionPrinter<'ir> {
                 }
 
                 SuperPropertyKey::Computed => {
-                    let [key] = operation.operands() else {
+                    let [key] = operands else {
                         unreachable!("computed super property reads have one operand");
                     };
 
@@ -745,7 +749,7 @@ impl<'ir> FunctionPrinter<'ir> {
 
             OperationKind::StoreProperty(property) => match property.key() {
                 PropertyKey::Static(name) => {
-                    let [object, value] = operation.operands() else {
+                    let [object, value] = operands else {
                         unreachable!("static property stores have two operands");
                     };
 
@@ -756,7 +760,7 @@ impl<'ir> FunctionPrinter<'ir> {
                     )
                 }
                 PropertyKey::Computed => {
-                    let [object, key, value] = operation.operands() else {
+                    let [object, key, value] = operands else {
                         unreachable!("computed property stores have three operands");
                     };
 
@@ -769,7 +773,7 @@ impl<'ir> FunctionPrinter<'ir> {
                 }
 
                 PropertyKey::Private(private_name) => {
-                    let [object, value] = operation.operands() else {
+                    let [object, value] = operands else {
                         unreachable!("private property stores have two operands");
                     };
 
@@ -784,7 +788,7 @@ impl<'ir> FunctionPrinter<'ir> {
 
             OperationKind::StoreSuperProperty(property) => match property.key() {
                 SuperPropertyKey::Static(name) => {
-                    let [value] = operation.operands() else {
+                    let [value] = operands else {
                         unreachable!("static super stores have one operand");
                     };
 
@@ -792,7 +796,7 @@ impl<'ir> FunctionPrinter<'ir> {
                 }
 
                 SuperPropertyKey::Computed => {
-                    let [key, value] = operation.operands() else {
+                    let [key, value] = operands else {
                         unreachable!("computed super stores have two operands");
                     };
 
@@ -805,7 +809,7 @@ impl<'ir> FunctionPrinter<'ir> {
             },
 
             OperationKind::HasPrivateName(predicate) => {
-                let [object] = operation.operands() else {
+                let [object] = operands else {
                     unreachable!("private-name checks have one operand");
                 };
 
@@ -817,7 +821,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::IsNullish(_) => {
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("nullish predicates have one operand");
                 };
 
@@ -826,7 +830,7 @@ impl<'ir> FunctionPrinter<'ir> {
 
             OperationKind::Typeof(type_of) => match type_of.target() {
                 TypeofTarget::Value => {
-                    let [value] = operation.operands() else {
+                    let [value] = operands else {
                         unreachable!("value typeof operations have one operand");
                     };
 
@@ -834,7 +838,7 @@ impl<'ir> FunctionPrinter<'ir> {
                 }
                 TypeofTarget::Global(name) => {
                     assert!(
-                        operation.operands().is_empty(),
+                        operands.is_empty(),
                         "global typeof operations have no operands",
                     );
 
@@ -844,21 +848,21 @@ impl<'ir> FunctionPrinter<'ir> {
 
             OperationKind::Delete(delete) => match delete.target() {
                 DeleteTarget::Value => {
-                    let [value] = operation.operands() else {
+                    let [value] = operands else {
                         unreachable!("value delete operations have one operand");
                     };
 
                     format!("delete_value {}", print_value(*value))
                 }
                 DeleteTarget::Property(PropertyKey::Static(name)) => {
-                    let [object] = operation.operands() else {
+                    let [object] = operands else {
                         unreachable!("static property deletes have one operand");
                     };
 
                     format!("delete_property {}, {name:?}", print_value(*object))
                 }
                 DeleteTarget::Property(PropertyKey::Computed) => {
-                    let [object, key] = operation.operands() else {
+                    let [object, key] = operands else {
                         unreachable!("computed property deletes have two operands");
                     };
 
@@ -881,7 +885,7 @@ impl<'ir> FunctionPrinter<'ir> {
                     UnaryOperator::LogicalNot => "not",
                     UnaryOperator::Void => "void",
                 };
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("unary operations have one operand");
                 };
 
@@ -893,7 +897,7 @@ impl<'ir> FunctionPrinter<'ir> {
                     UpdateOperator::Increment => "increment",
                     UpdateOperator::Decrement => "decrement",
                 };
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("update operations have one operand");
                 };
 
@@ -937,7 +941,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::Await(_) => {
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("await operations have one operand");
                 };
 
@@ -945,7 +949,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::Yield(yield_operation) => {
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("yield operations have one operand");
                 };
                 let operator = match yield_operation.kind() {
@@ -957,7 +961,6 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::Call(call) => {
-                let operands = operation.operands();
                 let (target, receiver) = print_call_target(call.target(), operands);
                 let receiver = receiver
                     .map(|receiver| format!("receiver: {}, ", print_value(receiver)))
@@ -974,7 +977,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::Construct(construct) => {
-                let [constructor] = operation.operands() else {
+                let [constructor] = operands else {
                     unreachable!("construct operations have a constructor operand");
                 };
                 let arguments = print_call_arguments(construct.arguments());
@@ -986,10 +989,7 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::Jump(jump) => {
-                format!(
-                    "jump {}",
-                    print_block_target(jump.target(), operation.operands())
-                )
+                format!("jump {}", print_block_target(jump.target(), operands))
             }
 
             OperationKind::If(if_operation) => {
@@ -1022,7 +1022,7 @@ impl<'ir> FunctionPrinter<'ir> {
 
                 format!(
                     "try body: {}, catch: {catch}, finally: {finally}, completion: bb{}",
-                    print_block_target(try_operation.try_target(), operation.operands()),
+                    print_block_target(try_operation.try_target(), operands),
                     try_operation.completion_block().index(),
                 )
             }
@@ -1046,8 +1046,8 @@ impl<'ir> FunctionPrinter<'ir> {
                 format!(
                     "while {}, body: {}, exit: {}{labels}",
                     print_value(condition),
-                    print_block_target(body.target(), body.arguments(operation.operands())),
-                    print_block_target(exit.target(), exit.arguments(operation.operands())),
+                    print_block_target(body.target(), body.arguments(operands)),
+                    print_block_target(exit.target(), exit.arguments(operands)),
                 )
             }
 
@@ -1070,8 +1070,8 @@ impl<'ir> FunctionPrinter<'ir> {
                 format!(
                     "do_while {}, body: {}, exit: {}{labels}",
                     print_value(condition),
-                    print_block_target(body.target(), body.arguments(operation.operands())),
-                    print_block_target(exit.target(), exit.arguments(operation.operands())),
+                    print_block_target(body.target(), body.arguments(operands)),
+                    print_block_target(exit.target(), exit.arguments(operands)),
                 )
             }
 
@@ -1087,7 +1087,7 @@ impl<'ir> FunctionPrinter<'ir> {
                     ),
                     format!(
                         "test: {}",
-                        print_block_target(test.target(), test.arguments(operation.operands()))
+                        print_block_target(test.target(), test.arguments(operands))
                     ),
                     format!("body: bb{}", for_operation.body_block().index()),
                     format!("update: bb{}", for_operation.update_block().index()),
@@ -1126,8 +1126,8 @@ impl<'ir> FunctionPrinter<'ir> {
                 let mut text = format!(
                     "for_in {}, body: {} [produces: 1], exit: {}",
                     print_value(object),
-                    print_block_target(body.target(), body.arguments(operation.operands())),
-                    print_block_target(exit.target(), exit.arguments(operation.operands())),
+                    print_block_target(body.target(), body.arguments(operands)),
+                    print_block_target(exit.target(), exit.arguments(operands)),
                 );
                 append_loop_fields(&mut text, for_in.per_iteration_bindings(), for_in.labels());
                 text
@@ -1152,8 +1152,8 @@ impl<'ir> FunctionPrinter<'ir> {
                 let mut text = format!(
                     "{name} {}, body: {} [produces: 1], exit: {}",
                     print_value(iterable),
-                    print_block_target(body.target(), body.arguments(operation.operands())),
-                    print_block_target(exit.target(), exit.arguments(operation.operands())),
+                    print_block_target(body.target(), body.arguments(operands)),
+                    print_block_target(exit.target(), exit.arguments(operands)),
                 );
                 append_loop_fields(&mut text, for_of.per_iteration_bindings(), for_of.labels());
                 text
@@ -1178,10 +1178,7 @@ impl<'ir> FunctionPrinter<'ir> {
 
                         format!(
                             "{selector}: {}",
-                            print_block_target(
-                                successor.target(),
-                                successor.arguments(operation.operands()),
-                            ),
+                            print_block_target(successor.target(), successor.arguments(operands),),
                         )
                     })
                     .collect::<Vec<_>>()
@@ -1200,10 +1197,7 @@ impl<'ir> FunctionPrinter<'ir> {
                         1,
                         format!(
                             "no_match: {}",
-                            print_block_target(
-                                successor.target(),
-                                successor.arguments(operation.operands()),
-                            ),
+                            print_block_target(successor.target(), successor.arguments(operands),),
                         ),
                     );
                 }
@@ -1219,6 +1213,61 @@ impl<'ir> FunctionPrinter<'ir> {
                 )
             }
 
+            OperationKind::EnterFinally(enter) => {
+                let successors = operation.successors();
+                let [successor] = successors.as_slice() else {
+                    unreachable!("enter_finally operations have one successor");
+                };
+                let completion = match enter.kind() {
+                    crate::CompletionKind::Normal => "normal".to_owned(),
+                    crate::CompletionKind::Return => {
+                        format!("return {}", print_value(operands[0]))
+                    }
+                    crate::CompletionKind::Throw => {
+                        format!("throw {}", print_value(operands[0]))
+                    }
+                    crate::CompletionKind::Break(target) => {
+                        format!("break bb{}", target.index())
+                    }
+                    crate::CompletionKind::Continue(target) => {
+                        format!("continue bb{}", target.index())
+                    }
+                };
+
+                format!(
+                    "enter_finally {completion}, target: {}",
+                    print_block_target(
+                        successor.target(),
+                        successor.arguments(operation.operands()),
+                    ),
+                )
+            }
+
+            OperationKind::ResumeCompletion(resume) => {
+                let Some(completion) = operands.first() else {
+                    unreachable!("resume_completion operations have one completion operand");
+                };
+                let successors = operation.successors();
+                let cases = resume
+                    .cases()
+                    .iter()
+                    .zip(successors)
+                    .map(|(case, successor)| {
+                        format!(
+                            "{}: {}",
+                            print_completion_kind(case.kind()),
+                            print_block_target(
+                                successor.target(),
+                                successor.arguments(operation.operands()),
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                format!("resume_completion {}, {cases}", print_value(*completion))
+            }
+
             OperationKind::RegionYield(_) => {
                 let values = operation
                     .operands()
@@ -1232,28 +1281,51 @@ impl<'ir> FunctionPrinter<'ir> {
             }
 
             OperationKind::Return(_) => {
-                let [value] = operation.operands() else {
+                let [value] = operands else {
                     unreachable!("return operations have one operand");
                 };
 
                 format!("return {}", print_value(*value))
             }
 
-            OperationKind::Throw(_) => {
-                let [value] = operation.operands() else {
+            OperationKind::Throw(throw_operation) => {
+                let [value] = operands else {
                     unreachable!("throw operations have one operand");
                 };
 
-                format!("throw {}", print_value(*value))
+                match throw_operation.exception_target() {
+                    Some(target) => format!(
+                        "throw {}, exception: {}",
+                        print_value(*value),
+                        print_block_target(target, &[]),
+                    ),
+                    None => format!("throw {}", print_value(*value)),
+                }
             }
+
+            OperationKind::Invoke(_) => unreachable!("invoke cannot contain another terminator"),
         };
 
-        let unwind = match operation.unwind_target() {
-            UnwindTarget::Propagate => String::new(),
-            UnwindTarget::Handler(handler) => format!(" [unwind: @{}]", handler.index()),
+        let body = match invoke {
+            Some(_) => {
+                let successors = operation.successors();
+                let [normal, exception] = successors.as_slice() else {
+                    unreachable!("invoke operations must have two successors");
+                };
+
+                format!(
+                    "invoke {body}, normal: {}, exception: {}",
+                    print_block_target(normal.target(), normal.arguments(operation.operands()),),
+                    print_block_target(
+                        exception.target(),
+                        exception.arguments(operation.operands()),
+                    ),
+                )
+            }
+            None => body,
         };
 
-        format!("{result_prefix}{body}{unwind}")
+        format!("{result_prefix}{body}")
     }
 }
 
@@ -1697,6 +1769,16 @@ fn print_value(value: ValueId) -> String {
     format!("%{}", value.index())
 }
 
+fn print_completion_kind(kind: crate::CompletionKind) -> String {
+    match kind {
+        crate::CompletionKind::Normal => "normal".to_owned(),
+        crate::CompletionKind::Return => "return".to_owned(),
+        crate::CompletionKind::Throw => "throw".to_owned(),
+        crate::CompletionKind::Break(target) => format!("break bb{}", target.index()),
+        crate::CompletionKind::Continue(target) => format!("continue bb{}", target.index()),
+    }
+}
+
 fn print_module_attributes(attributes: &[crate::ModuleAttribute]) -> String {
     if attributes.is_empty() {
         return String::new();
@@ -1727,8 +1809,8 @@ mod tests {
     use crate::{
         BinaryOp, BinaryOperator, BindingKind, BindingPattern, ConstantOp, ConstantValue,
         CreateClassOp, CreateFunctionOp, FunctionKind, FunctionMode, FunctionParameterKind,
-        IsNullishOp, JsModuleIr, JsxElementName, JsxElementOp, LoadGlobalOp, ModuleBuilder,
-        OperationKind, ReturnOp, UnwindTarget,
+        IsNullishOp, JsModuleIr, JsxElementName, JsxElementOp, ModuleBuilder, OperationKind,
+        ReturnOp,
     };
 
     use super::{print_function, print_module};
@@ -1746,7 +1828,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(42.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
         }
 
@@ -1804,7 +1885,6 @@ mod tests {
                     crate::LocationId::UNKNOWN,
                     OperationKind::CreateFunction(CreateFunctionOp::new(nested_function)),
                     [],
-                    crate::UnwindTarget::Propagate,
                 );
         }
 
@@ -1874,14 +1954,12 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(20.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let left = builder.operation_results(left)[0];
             let right = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(22.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let right = builder.operation_results(right)[0];
 
@@ -1889,7 +1967,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
-                crate::UnwindTarget::Propagate,
             );
         }
 
@@ -1902,7 +1979,7 @@ mod tests {
     }
 
     #[test]
-    fn prints_exception_handlers_and_unwind_targets() {
+    fn prints_exception_handlers() {
         let mut module = JsModuleIr::new();
         let function_id = module.entry_function();
         let entry_block = module.function(function_id).unwrap().entry_block();
@@ -1911,15 +1988,8 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function_id);
             let catch_entry = builder.create_block();
-            let (handler, _) = builder.create_catch_handler(None, catch_entry);
-
+            builder.create_catch_handler(None, catch_entry);
             builder.switch_to_block(entry_block);
-            builder.append_operation(
-                crate::LocationId::UNKNOWN,
-                OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
-                [],
-                UnwindTarget::Handler(handler),
-            );
         }
 
         let function = module.function(function_id).unwrap();
@@ -1930,7 +2000,6 @@ mod tests {
                 "handler @0 catch entry: bb1\n",
                 "\n",
                 "bb0:\n",
-                "  %1 = load_global \"value\" [unwind: @0]\n",
                 "\n",
                 "bb1(%0 [exception]):",
             )
@@ -1950,7 +2019,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
-                crate::UnwindTarget::Propagate,
             );
         }
 
@@ -1972,7 +2040,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::CreateClass(CreateClassOp::new(None, None, [])),
                 [],
-                crate::UnwindTarget::Propagate,
             );
         }
 
@@ -2001,7 +2068,6 @@ mod tests {
                     [],
                 )),
                 [],
-                UnwindTarget::Propagate,
             );
         }
 
@@ -2025,7 +2091,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Null)),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let value = builder.operation_results(value)[0];
 
@@ -2033,7 +2098,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::IsNullish(IsNullishOp::new()),
                 [value],
-                crate::UnwindTarget::Propagate,
             );
         }
 
@@ -2057,7 +2121,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(42.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let value = builder.operation_results(constant)[0];
 
@@ -2065,7 +2128,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [value],
-                crate::UnwindTarget::Propagate,
             );
         }
 

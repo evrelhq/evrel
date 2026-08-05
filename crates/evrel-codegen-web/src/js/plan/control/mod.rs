@@ -124,7 +124,9 @@ impl JsControlSequence {
                         finally.visit_edges(visit);
                     }
                 }
-                JsControlStep::Block(_)
+                JsControlStep::Operations(_)
+                | JsControlStep::Return { .. }
+                | JsControlStep::Throw { .. }
                 | JsControlStep::Break { .. }
                 | JsControlStep::Continue { .. } => {}
             }
@@ -159,11 +161,17 @@ impl JsEdgeKey {
 /// One validated structured JavaScript action.
 #[derive(Debug)]
 pub(crate) enum JsControlStep {
-    /// Emits the ordinary operations in one IR block.
-    Block(BlockId),
+    /// Emits an already selected sequence of ordinary JavaScript operations.
+    Operations(Box<[OperationId]>),
 
     /// Executes the SSA transfer for one exact CFG edge.
     Edge(JsEdgeKey),
+
+    /// Emits a return whose pending completion is represented explicitly in IR.
+    Return { value: ValueId },
+
+    /// Emits a throw whose pending completion is represented explicitly in IR.
+    Throw { value: ValueId },
 
     /// Emits a structured JavaScript conditional.
     If {
@@ -308,9 +316,9 @@ pub(crate) enum JsValueFlowStep {
     /// The branch has reached the flow's result block.
     Complete,
 
-    /// Emit one block, then follow its planned terminator.
-    Block {
-        block: BlockId,
+    /// Emit one selected operation sequence, then follow its planned continuation.
+    Operations {
+        operations: Box<[OperationId]>,
         continuation: JsValueFlowContinuation,
     },
 }

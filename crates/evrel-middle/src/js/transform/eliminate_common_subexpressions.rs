@@ -13,13 +13,9 @@ use crate::js::analysis::{
 /// Removes repeated deterministic expressions whose earlier result dominates
 /// the repeated evaluation.
 ///
-/// Returns zero when the function's value flow or control flow cannot be
-/// modeled soundly.
 pub fn eliminate_common_subexpressions(function: &mut JsFunctionIr) -> usize {
     let replacements = {
-        let Ok(values) = FunctionValueAnalysis::compute(function) else {
-            return 0;
-        };
+        let values = FunctionValueAnalysis::compute(function);
 
         let Some(replacements) = plan_replacements(function, &values) else {
             return 0;
@@ -72,7 +68,7 @@ fn plan_replacements(
     let mut replacements = Vec::new();
 
     for (region, _) in function.regions() {
-        let graph = RegionControlFlowGraph::compute(function, region).ok()?;
+        let graph = RegionControlFlowGraph::compute(function, region);
         let dominators = RegionDominatorTree::compute(&graph);
 
         plan_region_replacements(function, values, &dominators, &mut replacements);
@@ -194,8 +190,7 @@ fn apply_replacements(function: &mut JsFunctionIr, replacements: Vec<Replacement
 mod tests {
     use evrel_js_ir::{
         BinaryOp, BinaryOperator, BlockTarget, ConstantOp, ConstantValue, IfOp, JsModuleIr, JumpOp,
-        LoadGlobalOp, LoadThisOp, ModuleBuilder, OperationId, OperationKind, ReturnOp,
-        UnwindTarget, ValueId,
+        LoadGlobalOp, LoadThisOp, ModuleBuilder, OperationId, OperationKind, ReturnOp, ValueId,
     };
 
     use super::eliminate_common_subexpressions;
@@ -218,7 +213,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
-                UnwindTarget::Propagate,
             );
 
             (first, first_result, repeated, returned)
@@ -261,7 +255,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(successor, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(successor);
@@ -270,7 +263,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
-                UnwindTarget::Propagate,
             );
 
             (first, first_result, repeated, returned)
@@ -314,7 +306,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadThis(LoadThisOp::new()),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
 
@@ -326,7 +317,6 @@ mod tests {
                     completion,
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(left_block);
@@ -336,7 +326,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [left_result],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(right_block);
@@ -346,7 +335,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [right_result],
-                UnwindTarget::Propagate,
             );
 
             builder.switch_to_block(completion);
@@ -355,7 +343,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [undefined],
-                UnwindTarget::Propagate,
             );
 
             (left_addition, right_addition)
@@ -385,7 +372,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
                 [],
-                UnwindTarget::Propagate,
             );
             let unknown = builder.operation_results(unknown)[0];
             let one = append_number(&mut builder, 1.0);
@@ -397,7 +383,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [repeated_result],
-                UnwindTarget::Propagate,
             );
 
             (first, repeated)
@@ -423,7 +408,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [left, right],
-            UnwindTarget::Propagate,
         );
 
         (operation, builder.operation_results(operation)[0])
@@ -434,7 +418,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]
@@ -445,7 +428,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]

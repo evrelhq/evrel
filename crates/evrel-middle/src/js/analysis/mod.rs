@@ -11,7 +11,7 @@ mod program_linkage;
 mod program_reachability;
 
 pub use binding_promotion::{FunctionBindingPromotion, ModuleBindingPromotion, PromotableBinding};
-pub use control_flow::{RegionControlFlowError, RegionControlFlowGraph};
+pub use control_flow::RegionControlFlowGraph;
 pub use dominance_frontier::RegionDominanceFrontier;
 pub use dominator_tree::RegionDominatorTree;
 pub use function_value::{AbstractValue, FunctionValueAnalysis, FunctionValueInputs, ValueTypeSet};

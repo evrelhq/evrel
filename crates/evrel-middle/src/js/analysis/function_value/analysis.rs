@@ -2,8 +2,6 @@
 
 use evrel_js_ir::{BlockId, JsFunctionIr, OperationId, ValueId};
 
-use crate::js::analysis::RegionControlFlowError;
-
 use super::sparse::SparseValueAnalysis;
 use super::{AbstractValue, FunctionValueInputs};
 
@@ -19,18 +17,15 @@ pub struct FunctionValueAnalysis {
 
 impl FunctionValueAnalysis {
     /// Computes value facts with unknown external inputs.
-    pub fn compute(function: &JsFunctionIr) -> Result<Self, RegionControlFlowError> {
+    pub fn compute(function: &JsFunctionIr) -> Self {
         Self::compute_with_inputs(function, &FunctionValueInputs::new())
     }
 
     /// Computes value facts with explicitly supplied boundary or result facts.
-    pub fn compute_with_inputs(
-        function: &JsFunctionIr,
-        inputs: &FunctionValueInputs,
-    ) -> Result<Self, RegionControlFlowError> {
-        Ok(Self {
-            sparse: SparseValueAnalysis::compute(function, inputs)?,
-        })
+    pub fn compute_with_inputs(function: &JsFunctionIr, inputs: &FunctionValueInputs) -> Self {
+        Self {
+            sparse: SparseValueAnalysis::compute(function, inputs),
+        }
     }
 
     /// Returns the context-independent fact for an SSA value.

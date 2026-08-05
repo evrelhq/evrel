@@ -10,12 +10,9 @@ use rewrite::{plan_constant_replacements, rewrite_constants};
 
 /// Replaces proven effect-free operation results with exact constants.
 ///
-/// Returns zero when the function's value flow cannot be modeled soundly.
 pub fn propagate_constants(function: &mut JsFunctionIr) -> usize {
     let replacements = {
-        let Ok(analysis) = FunctionValueAnalysis::compute(function) else {
-            return 0;
-        };
+        let analysis = FunctionValueAnalysis::compute(function);
 
         plan_constant_replacements(function, &analysis)
     };

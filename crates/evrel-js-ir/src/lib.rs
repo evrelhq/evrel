@@ -20,7 +20,7 @@ pub use block::{BasicBlockData, BlockParameter, BlockParameterSource};
 pub use function::{
     ExceptionHandlerData, ExceptionHandlerKind, FunctionBuilder, FunctionEditor, FunctionKind,
     FunctionMode, FunctionParameter, FunctionParameterKind, FunctionProperties, JsFunctionIr,
-    LabeledStatementData, UnwindTarget,
+    LabeledStatementData,
 };
 pub use ids::{
     BindingId, BlockId, ExceptionHandlerId, FunctionId, LabeledStatementId, LocationId, ModuleId,
@@ -35,19 +35,20 @@ pub use operation::{
     ArrayLiteralElement, ArrayLiteralOp, AwaitOp, BinaryOp, BinaryOperator, BindingWriteMode,
     BlockTarget, CallArgument, CallOp, CallReceiver, CallTarget, ClassElement, ClassElementKey,
     ClassField, ClassFieldPlacement, ClassMethod, ClassMethodKind, ClassMethodPlacement,
-    ClassStaticBlock, ConstantOp, ConstantValue, ConstructOp, CreateClassOp, CreateFunctionOp,
-    DebuggerOp, DeleteOp, DeleteTarget, DestructureAssignmentOp, DestructureBindingOp, DoWhileOp,
-    DynamicImportOp, DynamicImportPhase, ForInOp, ForOfKind, ForOfOp, ForOp, HasPrivateNameOp,
-    IfOp, InitializeBindingOp, IsNullishOp, JsString, JsxAttribute, JsxAttributeName,
-    JsxAttributeValue, JsxChild, JsxElementName, JsxElementOp, JsxFragmentOp, JsxMemberBase,
-    JumpOp, LoadArgumentsOp, LoadBindingOp, LoadGlobalOp, LoadPropertyOp, LoadSuperPropertyOp,
-    LoadThisOp, LoopKind, LoopOperation, MemoryEffects, MetaPropertyKind, MetaPropertyOp,
-    ObjectLiteralEntry, ObjectLiteralKey, ObjectLiteralOp, ObjectMethodKind, OperationData,
-    OperationEffects, OperationKind, OperationSuccessor, PropertyKey, RegExpLiteralOp,
-    RegionYieldOp, ReturnOp, StoreBindingOp, StoreGlobalOp, StorePropertyOp, StoreSuperPropertyOp,
-    SuperCallOp, SuperPropertyKey, SwitchCase, SwitchOp, TaggedTemplateOp, TemplateLiteralOp,
-    TemplateQuasi, ThrowOp, TryOp, TypeofOp, TypeofTarget, UnaryOp, UnaryOperator, UpdateOp,
-    UpdateOperator, WhileOp, YieldKind, YieldOp,
+    ClassStaticBlock, CompletionCase, CompletionKind, ConstantOp, ConstantValue, ConstructOp,
+    CreateClassOp, CreateFunctionOp, DebuggerOp, DeleteOp, DeleteTarget, DestructureAssignmentOp,
+    DestructureBindingOp, DoWhileOp, DynamicImportOp, DynamicImportPhase, EnterFinallyOp, ForInOp,
+    ForOfKind, ForOfOp, ForOp, HasPrivateNameOp, IfOp, InitializeBindingOp, InvokeOp, IsNullishOp,
+    JsString, JsxAttribute, JsxAttributeName, JsxAttributeValue, JsxChild, JsxElementName,
+    JsxElementOp, JsxFragmentOp, JsxMemberBase, JumpOp, LoadArgumentsOp, LoadBindingOp,
+    LoadGlobalOp, LoadPropertyOp, LoadSuperPropertyOp, LoadThisOp, LoopKind, LoopOperation,
+    MemoryEffects, MetaPropertyKind, MetaPropertyOp, ObjectLiteralEntry, ObjectLiteralKey,
+    ObjectLiteralOp, ObjectMethodKind, OperationData, OperationEffects, OperationKind,
+    OperationSuccessor, PropertyKey, RegExpLiteralOp, RegionYieldOp, ResumeCompletionOp, ReturnOp,
+    StoreBindingOp, StoreGlobalOp, StorePropertyOp, StoreSuperPropertyOp, SuperCallOp,
+    SuperPropertyKey, SwitchCase, SwitchOp, TaggedTemplateOp, TemplateLiteralOp, TemplateQuasi,
+    ThrowOp, TryOp, TypeofOp, TypeofTarget, UnaryOp, UnaryOperator, UpdateOp, UpdateOperator,
+    WhileOp, YieldKind, YieldOp,
 };
 pub use pattern::{
     AssignmentPattern, AssignmentTarget, BindingPattern, ObjectAssignmentProperty,
@@ -61,4 +62,4 @@ pub use program::{
 };
 pub use region::{RegionData, RegionOwner};
 pub use source::{CompilerLocation, SourceDatabase, SourceFile, SyntheticReason, TextRange};
-pub use value::{ValueData, ValueDefinition, ValueUse};
+pub use value::{ValueData, ValueDefinition, ValueType, ValueUse};

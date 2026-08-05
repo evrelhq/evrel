@@ -19,6 +19,30 @@ use crate::{
 
 use super::operation::emit_operation;
 
+pub(crate) fn emit_operations<'ast>(
+    builder: &AstBuilder<'ast>,
+    module: &JsModuleIr,
+    output_plan: &JsModulePlan,
+    function: &JsFunctionIr,
+    function_plan: &JsFunctionPlan,
+    statements: &mut ArenaVec<'ast, Statement<'ast>>,
+    operations: &[OperationId],
+) -> Result<(), JsCodegenError> {
+    for &operation in operations {
+        emit_operation(
+            builder,
+            module,
+            output_plan,
+            function,
+            function_plan,
+            statements,
+            operation,
+        )?;
+    }
+
+    Ok(())
+}
+
 pub(crate) fn emit_operations_as_expressions<'ast>(
     builder: &AstBuilder<'ast>,
     module: &JsModuleIr,

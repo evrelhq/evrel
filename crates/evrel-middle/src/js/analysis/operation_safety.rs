@@ -89,7 +89,7 @@ fn operands_are_definitely(
 mod tests {
     use evrel_js_ir::{
         BinaryOp, BinaryOperator, ConstantOp, ConstantValue, DebuggerOp, JsModuleIr, LoadGlobalOp,
-        ModuleBuilder, OperationKind, ReturnOp, UnwindTarget, ValueId,
+        ModuleBuilder, OperationKind, ReturnOp, ValueId,
     };
 
     use super::is_safe_to_remove;
@@ -110,7 +110,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
-                UnwindTarget::Propagate,
             );
             let result = builder.operation_results(addition)[0];
 
@@ -118,14 +117,13 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
-                UnwindTarget::Propagate,
             );
 
             addition
         };
 
         let function = module.function(function).unwrap();
-        let values = FunctionValueAnalysis::compute(function).unwrap();
+        let values = FunctionValueAnalysis::compute(function);
 
         assert!(is_safe_to_remove(function, &values, addition));
     }
@@ -143,7 +141,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
                 [],
-                UnwindTarget::Propagate,
             );
             let left = builder.operation_results(left)[0];
             let right = append_number(&mut builder, 1.0);
@@ -151,7 +148,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
-                UnwindTarget::Propagate,
             );
             let result = builder.operation_results(addition)[0];
 
@@ -159,14 +155,13 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
-                UnwindTarget::Propagate,
             );
 
             addition
         };
 
         let function = module.function(function).unwrap();
-        let values = FunctionValueAnalysis::compute(function).unwrap();
+        let values = FunctionValueAnalysis::compute(function);
 
         assert!(!is_safe_to_remove(function, &values, addition));
     }
@@ -184,13 +179,11 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Debugger(DebuggerOp::new()),
                 [],
-                UnwindTarget::Propagate,
             );
             let result = builder.append_operation(
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
-                UnwindTarget::Propagate,
             );
             let result = builder.operation_results(result)[0];
 
@@ -198,14 +191,13 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [result],
-                UnwindTarget::Propagate,
             );
 
             debugger
         };
 
         let function = module.function(function).unwrap();
-        let values = FunctionValueAnalysis::compute(function).unwrap();
+        let values = FunctionValueAnalysis::compute(function);
 
         assert!(!is_safe_to_remove(function, &values, debugger));
     }
@@ -215,7 +207,6 @@ mod tests {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
             [],
-            UnwindTarget::Propagate,
         );
 
         builder.operation_results(operation)[0]

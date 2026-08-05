@@ -4,7 +4,7 @@ mod loops;
 mod support;
 mod switch;
 mod r#try;
-use evrel_js_ir::{BlockId, JsFunctionIr, JsModuleIr, OperationKind};
+use evrel_js_ir::{BlockId, JsFunctionIr, JsModuleIr};
 use loops::*;
 use oxc_allocator::{Box as ArenaBox, GetAllocator, Vec as ArenaVec};
 use oxc_ast::{
@@ -31,13 +31,16 @@ use crate::{
     },
 };
 
+use super::completion::{emit_return_statement, emit_throw_statement};
 use super::{
     FunctionEmission,
     binding::binding_name,
-    operation::emit_operation,
     property::emit_computed_member_expression,
     region::emit_expression_region,
-    sequence::{emit_operations_as_expressions, expression_sequence, optional_expression_sequence},
+    sequence::{
+        emit_operations, emit_operations_as_expressions, expression_sequence,
+        optional_expression_sequence,
+    },
     value::emit_value_expression,
 };
 
@@ -79,20 +82,30 @@ fn emit_control_sequence<'ast>(
 
     for step in sequence.steps() {
         match step {
-            JsControlStep::Block(block) => {
-                emit_block_operations(
+            JsControlStep::Operations(operations) => {
+                emit_operations(
                     builder,
                     module,
                     output_plan,
                     function,
                     function_plan,
                     &mut statements,
-                    *block,
+                    operations,
                 )?;
             }
 
             JsControlStep::Edge(edge) => {
                 emit_edge_transfer(builder, function, function_plan, &mut statements, *edge)?;
+            }
+
+            JsControlStep::Return { value } => {
+                let value = emit_value_expression(builder, function, function_plan, *value)?;
+                statements.push(emit_return_statement(builder, value));
+            }
+
+            JsControlStep::Throw { value } => {
+                let value = emit_value_expression(builder, function, function_plan, *value)?;
+                statements.push(emit_throw_statement(builder, value));
             }
 
             JsControlStep::If {

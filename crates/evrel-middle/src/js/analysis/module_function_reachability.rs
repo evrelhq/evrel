@@ -71,7 +71,6 @@ fn retain_with_parents(
 mod tests {
     use evrel_js_ir::{
         CreateFunctionOp, FunctionKind, FunctionMode, JsModuleIr, ModuleBuilder, OperationKind,
-        UnwindTarget,
     };
 
     use super::ModuleFunctionReachability;
@@ -93,13 +92,11 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(outer)),
                 [],
-                UnwindTarget::Propagate,
             );
             builder.function_builder(outer).append_operation(
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(inner)),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (outer, inner, orphan)
@@ -128,7 +125,6 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(inner)),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (outer, inner)

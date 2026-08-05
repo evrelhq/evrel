@@ -1,7 +1,8 @@
+use evrel_frontend::lower_source_file;
 use evrel_js_ir::{
     BinaryOp, BinaryOperator, BlockParameterSource, BlockTarget, ConstantOp, ConstantValue, IfOp,
     JsModuleIr, JumpOp, LoadGlobalOp, ModuleBuilder, OperationKind, ReturnOp, UnaryOp,
-    UnaryOperator, UnwindTarget, ValueId,
+    UnaryOperator, ValueId,
 };
 
 use super::propagate_constants;
@@ -19,7 +20,6 @@ fn replaces_a_proven_effect_free_result_with_a_constant() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
             [operand],
-            UnwindTarget::Propagate,
         );
         let result = builder.operation_results(operation)[0];
 
@@ -27,7 +27,6 @@ fn replaces_a_proven_effect_free_result_with_a_constant() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
-            UnwindTarget::Propagate,
         );
 
         operation
@@ -57,13 +56,16 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
         let then_block = builder.create_block();
         let else_block = builder.create_block();
         let join_block = builder.create_block();
-        let joined = builder.append_block_parameter(join_block, BlockParameterSource::Forwarded);
+        let joined = builder.append_block_parameter(
+            join_block,
+            BlockParameterSource::Forwarded,
+            evrel_js_ir::ValueType::JsValue,
+        );
 
         let condition = builder.append_operation(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::LoadGlobal(LoadGlobalOp::new("condition")),
             [],
-            UnwindTarget::Propagate,
         );
         let condition = builder.operation_results(condition)[0];
         builder.terminate(
@@ -74,7 +76,6 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
                 join_block,
             )),
             [condition],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(then_block);
@@ -83,7 +84,6 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [then_value],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(else_block);
@@ -92,7 +92,6 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(join_block, 1))),
             [else_value],
-            UnwindTarget::Propagate,
         );
 
         builder.switch_to_block(join_block);
@@ -100,14 +99,12 @@ fn propagates_through_an_ssa_block_parameter_before_rewriting() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
             [joined],
-            UnwindTarget::Propagate,
         );
         let result = builder.operation_results(operation)[0];
         builder.terminate(
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
-            UnwindTarget::Propagate,
         );
 
         operation
@@ -140,7 +137,6 @@ fn replaces_proven_non_throwing_numeric_addition() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
             [left, right],
-            UnwindTarget::Propagate,
         );
         let result = builder.operation_results(addition)[0];
 
@@ -148,7 +144,6 @@ fn replaces_proven_non_throwing_numeric_addition() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
-            UnwindTarget::Propagate,
         );
 
         addition
@@ -180,7 +175,6 @@ fn ignores_existing_constants_and_reaches_a_fixed_point() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
             [operand],
-            UnwindTarget::Propagate,
         );
         let result = builder.operation_results(operation)[0];
 
@@ -188,7 +182,6 @@ fn ignores_existing_constants_and_reaches_a_fixed_point() {
             evrel_js_ir::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [result],
-            UnwindTarget::Propagate,
         );
     }
 
@@ -203,54 +196,33 @@ fn ignores_existing_constants_and_reaches_a_fixed_point() {
 }
 
 #[test]
-fn skips_a_function_with_implicit_local_exception_flow() {
-    let mut module = JsModuleIr::new();
+fn optimizes_a_function_with_exceptions_lifted_from_an_inline_region() {
+    let mut module = lower_source_file(
+        "input.js",
+        "try { !true; [possiblyMissing]; } catch (error) {}",
+    )
+    .unwrap();
     let function = module.entry_function();
-
-    let candidate = {
-        let mut module_builder = ModuleBuilder::new(&mut module);
-        let mut builder = module_builder.function_builder(function);
-        let catch_entry = builder.create_block();
-        let (handler, _) = builder.create_catch_handler(None, catch_entry);
-
-        let operand = append_boolean(&mut builder, true);
-        let candidate = builder.append_operation(
-            evrel_js_ir::LocationId::UNKNOWN,
-            OperationKind::Unary(UnaryOp::new(UnaryOperator::LogicalNot)),
-            [operand],
-            UnwindTarget::Propagate,
-        );
-        let candidate_result = builder.operation_results(candidate)[0];
-
-        builder.append_operation(
-            evrel_js_ir::LocationId::UNKNOWN,
-            OperationKind::LoadGlobal(LoadGlobalOp::new("possiblyMissing")),
-            [],
-            UnwindTarget::Handler(handler),
-        );
-        builder.terminate(
-            evrel_js_ir::LocationId::UNKNOWN,
-            OperationKind::Return(ReturnOp::new()),
-            [candidate_result],
-            UnwindTarget::Propagate,
-        );
-
-        candidate
-    };
 
     assert_eq!(
         propagate_constants(module.function_mut(function).unwrap()),
-        0
+        1
     );
-    assert!(matches!(
-        module
-            .function(function)
-            .unwrap()
-            .operation(candidate)
-            .unwrap()
-            .kind(),
-        OperationKind::Unary(_),
-    ));
+}
+
+#[test]
+fn optimizes_across_explicit_finally_completion_flow() {
+    let mut module = lower_source_file(
+        "input.js",
+        "try { !true; possiblyMissing; } finally { cleanup(); }",
+    )
+    .unwrap();
+    let function = module.entry_function();
+
+    assert_eq!(
+        propagate_constants(module.function_mut(function).unwrap()),
+        1
+    );
 }
 
 fn append_boolean(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: bool) -> ValueId {
@@ -258,7 +230,6 @@ fn append_boolean(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: bool) -
         evrel_js_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(value))),
         [],
-        UnwindTarget::Propagate,
     );
 
     builder.operation_results(operation)[0]
@@ -269,7 +240,6 @@ fn append_number(builder: &mut evrel_js_ir::FunctionBuilder<'_>, value: f64) -> 
         evrel_js_ir::LocationId::UNKNOWN,
         OperationKind::Constant(ConstantOp::new(ConstantValue::Number(value))),
         [],
-        UnwindTarget::Propagate,
     );
 
     builder.operation_results(operation)[0]

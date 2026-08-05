@@ -39,6 +39,7 @@ pub(crate) fn emit_destructure_binding_statement<'ast>(
     operation: OperationId,
     destructure: &DestructureBindingOp,
     operands: &[ValueId],
+    results: &[ValueId],
 ) -> Result<Statement<'ast>, JsCodegenError> {
     let builder = emission.builder;
     let module = emission.module;
@@ -50,13 +51,15 @@ pub(crate) fn emit_destructure_binding_statement<'ast>(
         return Err(JsCodegenError::MalformedOperation { operation });
     };
 
-    let [] = function
-        .operation(operation)
-        .ok_or(JsCodegenError::UnknownOperation { operation })?
-        .results()
-    else {
+    let bindings = destructure.pattern().binding_ids();
+
+    if bindings.len() != results.len()
+        || bindings.iter().zip(results).any(|(&binding, &result)| {
+            plan.value(result) != Some(crate::js::plan::JsValueRepresentation::Binding(binding))
+        })
+    {
         return Err(JsCodegenError::MalformedOperation { operation });
-    };
+    }
 
     let kind = binding_pattern_declaration_kind(
         module,
@@ -96,6 +99,7 @@ pub(crate) fn emit_destructure_assignment_statement<'ast>(
     operation: OperationId,
     destructure: &DestructureAssignmentOp,
     operands: &[ValueId],
+    results: &[ValueId],
 ) -> Result<Statement<'ast>, JsCodegenError> {
     let builder = emission.builder;
     let module = emission.module;
@@ -106,10 +110,7 @@ pub(crate) fn emit_destructure_assignment_statement<'ast>(
     let [source] = operands else {
         return Err(JsCodegenError::MalformedOperation { operation });
     };
-    let operation_data = function
-        .operation(operation)
-        .ok_or(JsCodegenError::UnknownOperation { operation })?;
-    let [] = operation_data.results() else {
+    let [] = results else {
         return Err(JsCodegenError::MalformedOperation { operation });
     };
 

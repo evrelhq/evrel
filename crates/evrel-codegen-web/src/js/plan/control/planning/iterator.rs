@@ -79,7 +79,7 @@ pub(super) fn plan_iterator<'function>(
     header: BlockId,
     operation: IteratorOperation<'function>,
     visited: &mut HashSet<BlockId>,
-    active_controls: &[ActiveControl<'function>],
+    scope: ControlPlanningScope<'_, 'function>,
 ) -> Result<(JsControlStep, BlockId), JsCodegenError> {
     let function_id = context.function_id;
     let function = context.function;
@@ -155,7 +155,7 @@ pub(super) fn plan_iterator<'function>(
     let exit_block = exit_target.block();
     let produced_local = produced_parameter_local(function_id, function, values, body_block)?;
     let completion_flag = locals.allocate();
-    let mut nested_controls = active_controls.to_vec();
+    let mut nested_controls = scope.active_controls.to_vec();
 
     nested_controls.push(ActiveControl {
         structure_entry: header,
@@ -172,7 +172,7 @@ pub(super) fn plan_iterator<'function>(
         body_block,
         Some(header),
         visited,
-        &nested_controls,
+        scope.with_controls(&nested_controls),
     )?;
     body.prepend_edge(JsEdgeKey::new(terminator_id, 0));
 

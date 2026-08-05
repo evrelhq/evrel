@@ -54,9 +54,7 @@ impl FunctionValueInputs {
 
 #[cfg(test)]
 mod tests {
-    use evrel_js_ir::{
-        ConstantOp, ConstantValue, JsModuleIr, ModuleBuilder, OperationKind, UnwindTarget,
-    };
+    use evrel_js_ir::{ConstantOp, ConstantValue, JsModuleIr, ModuleBuilder, OperationKind};
 
     use super::FunctionValueInputs;
     use crate::js::analysis::AbstractValue;
@@ -74,13 +72,11 @@ mod tests {
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
-                UnwindTarget::Propagate,
             );
             let result = builder.append_operation(
                 evrel_js_ir::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
-                UnwindTarget::Propagate,
             );
 
             (

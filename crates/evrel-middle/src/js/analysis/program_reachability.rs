@@ -620,7 +620,7 @@ mod tests {
         BindingKind, ConstantOp, ConstantValue, DynamicImportOp, DynamicImportPhase, JsModuleIr,
         JsProgramIr, JsString, LoadBindingOp, LocationId, ModuleBuilder, ModuleDependency,
         ModuleExport, ModuleExportName, ModuleImport, ModuleKey, ModuleRequest, ModuleRequestKind,
-        ModuleTarget, OperationKind, ProgramBindingId, UnwindTarget,
+        ModuleTarget, OperationKind, ProgramBindingId,
     };
 
     use super::{ProgramLinkage, ProgramReachability};
@@ -686,7 +686,6 @@ mod tests {
                 false,
             )))),
             [],
-            UnwindTarget::Propagate,
         );
         let specifier = builder.operation_results(specifier)[0];
         builder.append_operation(
@@ -696,7 +695,6 @@ mod tests {
                 false,
             )),
             [specifier],
-            UnwindTarget::Propagate,
         );
 
         let mut program = JsProgramIr::new();
@@ -742,7 +740,6 @@ mod tests {
                 LocationId::UNKNOWN,
                 OperationKind::LoadBinding(LoadBindingOp::new(binding)),
                 [],
-                UnwindTarget::Propagate,
             );
             binding
         };

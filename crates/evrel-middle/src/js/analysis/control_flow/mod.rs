@@ -2,4 +2,4 @@
 
 mod region;
 
-pub use region::{RegionControlFlowError, RegionControlFlowGraph};
+pub use region::RegionControlFlowGraph;

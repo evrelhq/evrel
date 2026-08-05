@@ -3,10 +3,10 @@
 use crate::{
     BindingId, BindingKind, BindingPattern, BlockId, BlockParameterSource, ExceptionHandlerData,
     ExceptionHandlerId, ExceptionHandlerKind, FunctionId, FunctionKind, FunctionMode,
-    FunctionParameterKind, FunctionProperties, JsFunctionIr, JsModuleIr, LabeledStatementData,
-    LabeledStatementId, LocationId, OperationId, OperationKind, OperationSuccessor, PrivateNameId,
-    RegionId, RegionYieldOp, SourceFileId, SyntheticReason, TemplateSiteId, TextRange,
-    UnwindTarget, ValueId,
+    FunctionParameterKind, FunctionProperties, InvokeOp, JsFunctionIr, JsModuleIr,
+    LabeledStatementData, LabeledStatementId, LocationId, OperationEffects, OperationId,
+    OperationKind, OperationSuccessor, PrivateNameId, RegionId, RegionYieldOp, SourceFileId,
+    SyntheticReason, TemplateSiteId, TextRange, ValueId, ValueType,
 };
 
 /// Builds one function while tracking the current insertion block.
@@ -44,6 +44,21 @@ impl<'ir> FunctionBuilder<'ir> {
     /// Returns the block that will receive new operations.
     pub const fn current_block(&self) -> BlockId {
         self.current_block
+    }
+
+    /// Returns the region containing the current insertion block.
+    pub const fn current_region(&self) -> RegionId {
+        self.current_region
+    }
+
+    /// Returns exception-handler metadata by ID.
+    pub fn exception_handler(&self, handler: ExceptionHandlerId) -> Option<&ExceptionHandlerData> {
+        self.current_function().exception_handler(handler)
+    }
+
+    /// Returns the region containing a block.
+    pub fn block_region(&self, block: BlockId) -> Option<RegionId> {
+        self.current_function().block_region(block)
     }
 
     /// Returns whether this function inherits an implicit `arguments` binding.
@@ -222,7 +237,6 @@ impl<'ir> FunctionBuilder<'ir> {
         region: RegionId,
         location: LocationId,
         values: impl IntoIterator<Item = ValueId>,
-        unwind_target: UnwindTarget,
     ) {
         assert_eq!(
             self.current_region, region,
@@ -244,7 +258,6 @@ impl<'ir> FunctionBuilder<'ir> {
             location,
             OperationKind::RegionYield(RegionYieldOp::new(values.len())),
             values,
-            unwind_target,
         );
         self.restore_enclosing_insertion_point();
     }
@@ -289,9 +302,11 @@ impl<'ir> FunctionBuilder<'ir> {
 
         let handler =
             self.create_exception_handler(ExceptionHandlerKind::Catch, parent, entry_block);
-        let exception = self
-            .current_function_mut()
-            .append_block_parameter(entry_block, BlockParameterSource::Exception);
+        let exception = self.current_function_mut().append_block_parameter(
+            entry_block,
+            BlockParameterSource::Exception,
+            crate::ValueType::JsValue,
+        );
 
         (handler, exception)
     }
@@ -352,11 +367,12 @@ impl<'ir> FunctionBuilder<'ir> {
         &mut self,
         block: BlockId,
         source: BlockParameterSource,
+        ty: ValueType,
     ) -> ValueId {
         self.validate_block(block);
 
         self.current_function_mut()
-            .append_block_parameter(block, source)
+            .append_block_parameter(block, source, ty)
     }
 
     /// Moves the insertion point to an existing block.
@@ -366,43 +382,63 @@ impl<'ir> FunctionBuilder<'ir> {
         self.current_block = block;
     }
 
-    /// Appends an operation with its exceptional control-flow destination.
+    /// Appends an operation whose exceptions propagate from the function.
     pub fn append_operation(
         &mut self,
         location: LocationId,
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
-        unwind_target: UnwindTarget,
     ) -> OperationId {
         assert!(
             !kind.is_terminator(),
             "use FunctionBuilder::terminate for terminator operations"
         );
         self.validate_references(&kind);
-        self.validate_unwind_target(unwind_target);
 
         let block = self.current_block;
 
         self.current_function_mut()
-            .append_operation(block, location, unwind_target, kind, operands)
+            .append_operation(block, location, kind, operands)
     }
 
-    /// Terminates the current block with its exceptional control-flow destination.
+    /// Terminates the current block.
     pub fn terminate(
         &mut self,
         location: LocationId,
         kind: OperationKind,
         operands: impl IntoIterator<Item = ValueId>,
-        unwind_target: UnwindTarget,
     ) -> OperationId {
         assert!(kind.is_terminator(), "expected a terminator operation");
         self.validate_references(&kind);
-        self.validate_unwind_target(unwind_target);
 
         let block = self.current_block;
 
         self.current_function_mut()
-            .set_terminator(block, location, unwind_target, kind, operands)
+            .set_terminator(block, location, kind, operands)
+    }
+
+    /// Terminates the current block by executing one ordinary operation with
+    /// explicit normal and exceptional continuations.
+    ///
+    /// Operands contain the operation inputs first, followed by arguments
+    /// forwarded to the normal target and then the exceptional target.
+    pub fn invoke(
+        &mut self,
+        location: LocationId,
+        operation: OperationKind,
+        normal_target: crate::BlockTarget,
+        exception_target: crate::BlockTarget,
+        operands: impl IntoIterator<Item = ValueId>,
+    ) -> OperationId {
+        self.terminate(
+            location,
+            OperationKind::Invoke(Box::new(InvokeOp::new(
+                operation,
+                normal_target,
+                exception_target,
+            ))),
+            operands,
+        )
     }
 
     /// Returns the canonical location for a source range.
@@ -425,6 +461,12 @@ impl<'ir> FunctionBuilder<'ir> {
             .operation(operation)
             .expect("operation must belong to the function")
             .results()
+    }
+
+    /// Returns an operation kind's intrinsic effects and the effects of its
+    /// already-built inline regions.
+    pub fn operation_effects(&self, kind: &OperationKind) -> OperationEffects {
+        self.current_function().operation_kind_effects(kind)
     }
 
     fn current_function(&self) -> &JsFunctionIr {
@@ -468,8 +510,8 @@ impl<'ir> FunctionBuilder<'ir> {
             assert!(data.owner().is_none(), "operation region is already owned");
         }
 
-        for successor in kind.successors() {
-            self.validate_successor(successor);
+        for (successor_index, successor) in kind.successors().into_iter().enumerate() {
+            self.validate_successor(successor, kind.produced_argument_source(successor_index));
         }
 
         for block in kind.structural_blocks() {
@@ -477,6 +519,10 @@ impl<'ir> FunctionBuilder<'ir> {
         }
 
         match kind {
+            OperationKind::Invoke(operation) => {
+                self.validate_references(operation.operation());
+            }
+
             OperationKind::While(operation) => {
                 assert!(
                     ![
@@ -593,7 +639,11 @@ impl<'ir> FunctionBuilder<'ir> {
         }
     }
 
-    fn validate_successor(&self, successor: OperationSuccessor) {
+    fn validate_successor(
+        &self,
+        successor: OperationSuccessor,
+        produced_source: BlockParameterSource,
+    ) {
         let target = successor.target();
         let block = self
             .current_function()
@@ -613,8 +663,8 @@ impl<'ir> FunctionBuilder<'ir> {
         assert!(
             produced
                 .iter()
-                .all(|parameter| parameter.source() == BlockParameterSource::Produced),
-            "produced block parameters must precede forwarded parameters"
+                .all(|parameter| parameter.source() == produced_source),
+            "successor-produced block parameters have the wrong source"
         );
 
         assert!(
@@ -649,15 +699,6 @@ impl<'ir> FunctionBuilder<'ir> {
         );
     }
 
-    fn validate_unwind_target(&self, target: UnwindTarget) {
-        if let UnwindTarget::Handler(handler) = target {
-            assert!(
-                self.current_function().exception_handler(handler).is_some(),
-                "unwind handler must belong to the current function"
-            );
-        }
-    }
-
     fn restore_enclosing_insertion_point(&mut self) {
         let (region, block) = self
             .insertion_stack
@@ -673,11 +714,11 @@ impl<'ir> FunctionBuilder<'ir> {
 mod tests {
     use crate::{
         ArrayLiteralElement, ArrayLiteralOp, AwaitOp, BinaryOp, BinaryOperator, BindingKind,
-        BindingPattern, BlockParameterSource, BlockTarget, ConstantOp, ConstantValue,
-        CreateFunctionOp, ExceptionHandlerKind, ForInOp, FunctionKind, FunctionMode,
-        FunctionParameterKind, JsModuleIr, JumpOp, LoopKind, ModuleBuilder, OperationKind,
-        RegionYieldOp, ReturnOp, ThrowOp, UnwindTarget, ValueDefinition, WhileOp, YieldKind,
-        YieldOp,
+        BindingPattern, BlockParameterSource, BlockTarget, CompletionCase, CompletionKind,
+        ConstantOp, ConstantValue, CreateFunctionOp, EnterFinallyOp, ExceptionHandlerKind, ForInOp,
+        FunctionKind, FunctionMode, FunctionParameterKind, JsModuleIr, JumpOp, LoadGlobalOp,
+        LoopKind, ModuleBuilder, OperationKind, RegionYieldOp, ResumeCompletionOp, ReturnOp,
+        ValueDefinition, ValueType, WhileOp, YieldKind, YieldOp,
     };
 
     #[test]
@@ -693,7 +734,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
-            crate::UnwindTarget::Propagate,
         );
         let value = builder.operation_results(constant)[0];
 
@@ -701,7 +741,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Await(AwaitOp::new()),
             [value],
-            crate::UnwindTarget::Propagate,
         );
     }
 
@@ -718,7 +757,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
             [],
-            crate::UnwindTarget::Propagate,
         );
         let value = builder.operation_results(constant)[0];
 
@@ -726,7 +764,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Yield(YieldOp::new(YieldKind::Value)),
             [value],
-            crate::UnwindTarget::Propagate,
         );
     }
 
@@ -855,7 +892,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
                 [],
-                UnwindTarget::Propagate,
             );
             let condition = builder.operation_results(condition)[0];
 
@@ -863,7 +899,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(test, 0))),
                 [],
-                UnwindTarget::Propagate,
             );
             builder.switch_to_block(test);
             builder.terminate(
@@ -875,7 +910,6 @@ mod tests {
                     Box::new(["outer".into()]),
                 )),
                 [condition],
-                UnwindTarget::Propagate,
             );
 
             (test, body, exit)
@@ -904,7 +938,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Boolean(true))),
             [],
-            UnwindTarget::Propagate,
         );
         let condition = builder.operation_results(condition)[0];
         let exit = builder.create_block();
@@ -917,7 +950,6 @@ mod tests {
                 Box::new([]),
             )),
             [condition],
-            UnwindTarget::Propagate,
         );
     }
 
@@ -958,79 +990,7 @@ mod tests {
     }
 
     #[test]
-    fn assigns_an_unwind_handler_to_operations() {
-        let mut module = JsModuleIr::new();
-        let function_id = module.entry_function();
-
-        let (constant, terminator, handler) = {
-            let mut module_builder = ModuleBuilder::new(&mut module);
-            let mut builder = module_builder.function_builder(function_id);
-            let catch_entry = builder.create_block();
-            let (handler, _) = builder.create_catch_handler(None, catch_entry);
-
-            let constant = builder.append_operation(
-                crate::LocationId::UNKNOWN,
-                OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
-                [],
-                UnwindTarget::Handler(handler),
-            );
-            let value = builder.operation_results(constant)[0];
-            let terminator = builder.terminate(
-                crate::LocationId::UNKNOWN,
-                OperationKind::Throw(ThrowOp::new()),
-                [value],
-                UnwindTarget::Handler(handler),
-            );
-
-            (constant, terminator, handler)
-        };
-
-        let function = module.function(function_id).unwrap();
-
-        assert_eq!(
-            function.operation(constant).unwrap().unwind_target(),
-            UnwindTarget::Handler(handler)
-        );
-        assert!(
-            !function
-                .operation(constant)
-                .unwrap()
-                .kind()
-                .intrinsic_effects()
-                .may_throw()
-        );
-        assert!(
-            function
-                .operation(terminator)
-                .unwrap()
-                .kind()
-                .intrinsic_effects()
-                .may_throw()
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "unwind handler must enter the operation's region or an ancestor")]
-    fn rejects_an_unwind_handler_in_a_descendant_region() {
-        let mut module = JsModuleIr::new();
-        let function = module.entry_function();
-        let mut module_builder = ModuleBuilder::new(&mut module);
-        let mut builder = module_builder.function_builder(function);
-        let region = builder.begin_region(0);
-        let handler_entry = builder.current_block();
-        let (handler, _) = builder.create_catch_handler(None, handler_entry);
-
-        builder.abandon_region(region);
-        builder.append_operation(
-            crate::LocationId::UNKNOWN,
-            OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
-            [],
-            UnwindTarget::Handler(handler),
-        );
-    }
-
-    #[test]
-    fn appends_a_block_parameter() {
+    fn appends_a_typed_block_parameter() {
         let mut module = JsModuleIr::new();
         let function = module.entry_function();
 
@@ -1038,7 +998,11 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function);
             let block = builder.create_block();
-            let parameter = builder.append_block_parameter(block, BlockParameterSource::Forwarded);
+            let parameter = builder.append_block_parameter(
+                block,
+                BlockParameterSource::Forwarded,
+                crate::ValueType::Completion,
+            );
 
             (block, parameter)
         };
@@ -1051,6 +1015,10 @@ mod tests {
 
         assert_eq!(block_parameter.source(), BlockParameterSource::Forwarded);
         assert_eq!(block_parameter.value(), parameter);
+        assert_eq!(
+            function.value(parameter).unwrap().ty(),
+            ValueType::Completion
+        );
         assert_eq!(
             function.value(parameter).unwrap().definition(),
             &ValueDefinition::BlockParameter {
@@ -1069,7 +1037,11 @@ mod tests {
             let mut module_builder = ModuleBuilder::new(&mut module);
             let mut builder = module_builder.function_builder(function);
             let block = builder.create_block();
-            let parameter = builder.append_block_parameter(block, BlockParameterSource::Exception);
+            let parameter = builder.append_block_parameter(
+                block,
+                BlockParameterSource::Exception,
+                crate::ValueType::JsValue,
+            );
 
             (block, parameter)
         };
@@ -1091,6 +1063,91 @@ mod tests {
     }
 
     #[test]
+    fn builds_explicit_finally_completion_flow() {
+        let mut module = JsModuleIr::new();
+        let function = module.entry_function();
+
+        let (finally_block, resume) = {
+            let mut module_builder = ModuleBuilder::new(&mut module);
+            let mut builder = module_builder.function_builder(function);
+            let finally_block = builder.create_block();
+            let completion = builder.append_block_parameter(
+                finally_block,
+                BlockParameterSource::Produced,
+                ValueType::Completion,
+            );
+            let normal = builder.create_block();
+            let returned = builder.create_block();
+            builder.append_block_parameter(
+                returned,
+                BlockParameterSource::Produced,
+                ValueType::JsValue,
+            );
+            let value = builder.append_operation(
+                crate::LocationId::UNKNOWN,
+                OperationKind::Constant(ConstantOp::new(ConstantValue::Number(1.0))),
+                [],
+            );
+            let value = builder.operation_results(value)[0];
+
+            builder.terminate(
+                crate::LocationId::UNKNOWN,
+                OperationKind::EnterFinally(EnterFinallyOp::new(
+                    CompletionKind::Return,
+                    BlockTarget::new(finally_block, 0),
+                )),
+                [value],
+            );
+            builder.switch_to_block(finally_block);
+            let resume = builder.terminate(
+                crate::LocationId::UNKNOWN,
+                OperationKind::ResumeCompletion(ResumeCompletionOp::new([
+                    CompletionCase::new(CompletionKind::Normal, BlockTarget::new(normal, 0)),
+                    CompletionCase::new(CompletionKind::Return, BlockTarget::new(returned, 0)),
+                ])),
+                [completion],
+            );
+
+            (finally_block, resume)
+        };
+
+        let function = module.function(function).unwrap();
+        let printed = crate::print_function(function);
+
+        assert!(printed.contains("enter_finally return"), "{printed}");
+        assert!(printed.contains("resume_completion"), "{printed}");
+        assert_eq!(
+            function.block(finally_block).unwrap().terminator(),
+            Some(resume)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "fixed operation operand has the wrong value type")]
+    fn rejects_a_javascript_value_as_a_completion_operand() {
+        let mut module = JsModuleIr::new();
+        let function = module.entry_function();
+        let mut module_builder = ModuleBuilder::new(&mut module);
+        let mut builder = module_builder.function_builder(function);
+        let normal = builder.create_block();
+        let value = builder.append_operation(
+            crate::LocationId::UNKNOWN,
+            OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
+            [],
+        );
+        let value = builder.operation_results(value)[0];
+
+        builder.terminate(
+            crate::LocationId::UNKNOWN,
+            OperationKind::ResumeCompletion(ResumeCompletionOp::new([CompletionCase::new(
+                CompletionKind::Normal,
+                BlockTarget::new(normal, 0),
+            )])),
+            [value],
+        );
+    }
+
+    #[test]
     fn accepts_a_for_in_body_with_one_produced_parameter() {
         let mut module = JsModuleIr::new();
         let function = module.entry_function();
@@ -1099,12 +1156,15 @@ mod tests {
             let mut builder = module_builder.function_builder(function);
             let body = builder.create_block();
             let exit = builder.create_block();
-            let property_key = builder.append_block_parameter(body, BlockParameterSource::Produced);
+            let property_key = builder.append_block_parameter(
+                body,
+                BlockParameterSource::Produced,
+                crate::ValueType::JsValue,
+            );
             let object = builder.append_operation(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let object = builder.operation_results(object)[0];
 
@@ -1117,7 +1177,6 @@ mod tests {
                     Box::new([]),
                 )),
                 [object],
-                crate::UnwindTarget::Propagate,
             );
 
             (body, property_key)
@@ -1133,6 +1192,93 @@ mod tests {
     }
 
     #[test]
+    fn builds_an_invoke_with_normal_and_exceptional_results() {
+        let mut module = JsModuleIr::new();
+        let function = module.entry_function();
+
+        let (invoke, normal, exception) = {
+            let mut module_builder = ModuleBuilder::new(&mut module);
+            let mut builder = module_builder.function_builder(function);
+            let normal = builder.create_block();
+            let exception = builder.create_block();
+
+            builder.append_block_parameter(
+                normal,
+                BlockParameterSource::Produced,
+                ValueType::JsValue,
+            );
+            builder.append_block_parameter(
+                exception,
+                BlockParameterSource::Exception,
+                ValueType::JsValue,
+            );
+
+            let invoke = builder.invoke(
+                crate::LocationId::UNKNOWN,
+                OperationKind::LoadGlobal(LoadGlobalOp::new("value")),
+                BlockTarget::new(normal, 0),
+                BlockTarget::new(exception, 0),
+                [],
+            );
+
+            (invoke, normal, exception)
+        };
+
+        let function = module.function(function).unwrap();
+        let operation = function.operation(invoke).unwrap();
+        let successors = operation.successors();
+
+        assert!(matches!(operation.kind(), OperationKind::Invoke(_)));
+
+        assert_eq!(
+            function.block(function.entry_block()).unwrap().terminator(),
+            Some(invoke)
+        );
+        assert_eq!(operation.results(), []);
+        assert_eq!(successors.len(), 2);
+        assert_eq!(successors[0].target().block(), normal);
+        assert_eq!(successors[0].produced_argument_count(), 1);
+        assert_eq!(successors[1].target().block(), exception);
+        assert_eq!(successors[1].produced_argument_count(), 1);
+        let printed = crate::print_function(function);
+        assert!(
+            printed.contains("invoke load_global \"value\", normal: bb1, exception: bb2"),
+            "{printed}",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "produced argument type must match block parameter type")]
+    fn rejects_a_produced_argument_with_the_wrong_value_type() {
+        let mut module = JsModuleIr::new();
+        let function = module.entry_function();
+        let mut module_builder = ModuleBuilder::new(&mut module);
+        let mut builder = module_builder.function_builder(function);
+        let body = builder.create_block();
+        let exit = builder.create_block();
+
+        builder.append_block_parameter(body, BlockParameterSource::Produced, ValueType::Completion);
+
+        let object = builder.append_operation(
+            crate::LocationId::UNKNOWN,
+            OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
+            [],
+        );
+        let object = builder.operation_results(object)[0];
+
+        builder.terminate(
+            crate::LocationId::UNKNOWN,
+            OperationKind::ForIn(ForInOp::new(
+                BlockTarget::new(body, 0),
+                BlockTarget::new(exit, 0),
+                Box::new([]),
+                Box::new([]),
+            )),
+            [object],
+        );
+    }
+
+    #[test]
     #[should_panic(
         expected = "ordinary control flow cannot target exception or produced parameters"
     )]
@@ -1143,12 +1289,15 @@ mod tests {
         let mut builder = module_builder.function_builder(function);
         let target = builder.create_block();
 
-        builder.append_block_parameter(target, BlockParameterSource::Exception);
+        builder.append_block_parameter(
+            target,
+            BlockParameterSource::Exception,
+            crate::ValueType::JsValue,
+        );
         builder.terminate(
             crate::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
             [],
-            crate::UnwindTarget::Propagate,
         );
     }
 
@@ -1166,7 +1315,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(42.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             )
         };
 
@@ -1205,15 +1353,9 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(42.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let value = builder.operation_results(constant)[0];
-            builder.finish_region(
-                region,
-                crate::LocationId::UNKNOWN,
-                [value],
-                crate::UnwindTarget::Propagate,
-            );
+            builder.finish_region(region, crate::LocationId::UNKNOWN, [value]);
 
             let owner = builder.append_operation(
                 crate::LocationId::UNKNOWN,
@@ -1221,7 +1363,6 @@ mod tests {
                     expression: region,
                 }])),
                 [],
-                crate::UnwindTarget::Propagate,
             );
 
             (region, owner)
@@ -1256,7 +1397,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(20.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let left = builder.operation_results(left_operation)[0];
 
@@ -1264,7 +1404,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(22.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let right = builder.operation_results(right_operation)[0];
 
@@ -1272,7 +1411,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Binary(BinaryOp::new(BinaryOperator::Add)),
                 [left, right],
-                crate::UnwindTarget::Propagate,
             );
 
             (
@@ -1333,14 +1471,12 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Constant(ConstantOp::new(ConstantValue::Number(42.0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
             let returned_value = builder.operation_results(constant)[0];
             let terminator = builder.terminate(
                 crate::LocationId::UNKNOWN,
                 OperationKind::Return(ReturnOp::new()),
                 [returned_value],
-                crate::UnwindTarget::Propagate,
             );
 
             (constant, returned_value, terminator)
@@ -1369,7 +1505,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::RegionYield(RegionYieldOp::new(0)),
             [],
-            crate::UnwindTarget::Propagate,
         );
     }
 
@@ -1386,7 +1521,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Constant(ConstantOp::new(ConstantValue::Number(42.0))),
             [],
-            crate::UnwindTarget::Propagate,
         );
         let value = builder.operation_results(constant)[0];
 
@@ -1394,7 +1528,6 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Return(ReturnOp::new()),
             [value],
-            crate::UnwindTarget::Propagate,
         );
     }
 
@@ -1412,7 +1545,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 0))),
                 [],
-                crate::UnwindTarget::Propagate,
             );
 
             (entry, target, terminator)
@@ -1444,7 +1576,35 @@ mod tests {
             crate::LocationId::UNKNOWN,
             OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 1))),
             [],
-            crate::UnwindTarget::Propagate,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "successor argument type must match block parameter type")]
+    fn rejects_a_successor_argument_with_the_wrong_value_type() {
+        let mut module = JsModuleIr::new();
+        let function = module.entry_function();
+        let mut module_builder = ModuleBuilder::new(&mut module);
+        let mut builder = module_builder.function_builder(function);
+        let target = builder.create_block();
+
+        builder.append_block_parameter(
+            target,
+            BlockParameterSource::Forwarded,
+            ValueType::Completion,
+        );
+
+        let constant = builder.append_operation(
+            crate::LocationId::UNKNOWN,
+            OperationKind::Constant(ConstantOp::new(ConstantValue::Undefined)),
+            [],
+        );
+        let js_value = builder.operation_results(constant)[0];
+
+        builder.terminate(
+            crate::LocationId::UNKNOWN,
+            OperationKind::Jump(JumpOp::new(BlockTarget::new(target, 1))),
+            [js_value],
         );
     }
 
@@ -1464,7 +1624,6 @@ mod tests {
                         crate::LocationId::UNKNOWN,
                         OperationKind::Constant(ConstantOp::new(ConstantValue::Number(42.0))),
                         [],
-                        crate::UnwindTarget::Propagate,
                     );
                     let value = nested_builder.operation_results(constant)[0];
 
@@ -1472,7 +1631,6 @@ mod tests {
                         crate::LocationId::UNKNOWN,
                         OperationKind::Return(ReturnOp::new()),
                         [value],
-                        crate::UnwindTarget::Propagate,
                     );
 
                     value
@@ -1485,7 +1643,6 @@ mod tests {
                 crate::LocationId::UNKNOWN,
                 OperationKind::CreateFunction(CreateFunctionOp::new(nested)),
                 [],
-                crate::UnwindTarget::Propagate,
             );
 
             assert_eq!(returned_value.index(), 0);
