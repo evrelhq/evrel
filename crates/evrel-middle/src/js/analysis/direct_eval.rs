@@ -9,12 +9,16 @@ pub(super) fn is_direct_eval_call(
     let Some(operation) = function.operation(operation) else {
         return false;
     };
-    let OperationKind::Call(call) = operation.kind() else {
+    let kind = match operation.kind() {
+        OperationKind::Invoke(invoke) => invoke.operation(),
+        kind => kind,
+    };
+    let OperationKind::Call(call) = kind else {
         return false;
     };
     let Some(callee) = call
         .callee_operand_index()
-        .and_then(|index| operation.operands().get(index))
+        .and_then(|index| operation.operation_operands().get(index))
     else {
         return false;
     };
